@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -29,7 +31,11 @@ func (sr *ServiceRegistry) Deregister(name string) {
 func (sr *ServiceRegistry) GetAddress(name string) string {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
-	return sr.Services[name]
+	val, ok := sr.Services[name]
+	if !ok {
+		return ""
+	}
+	return val
 }
 
 func NewServiceRegistry() *ServiceRegistry {
@@ -39,6 +45,11 @@ func NewServiceRegistry() *ServiceRegistry {
 }
 
 type RateLimiter struct{}
+
+func (rl *RateLimiter) Allow() bool {
+	// TODO: Implement rate limiting
+	return true
+}
 
 func NewRateLimiter() *RateLimiter {
 	return &RateLimiter{}
@@ -98,7 +109,69 @@ func (rh *RequestHandler) HandleRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr *ServiceRegistry) {}
+func resolve_path(path string) (string, []string) {
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return path, nil
+	}
+	return parts[1], parts[2:]
+}
+
+func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr *ServiceRegistry) {
+	slog.Info("Received request", "path", r.URL.Path, "method", r.Method)
+	if !rl.Allow() {
+		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	// TODO: Authenticate the request
+
+	service_name, route := resolve_path(r.URL.Path)
+
+	slog.Info("Resolving service", "service_name", service_name)
+
+	address := sr.GetAddress(service_name)
+	if address == "" {
+		http.Error(w, "service not found", http.StatusNotFound)
+		return
+	}
+	// Create a new uri based on the resolved request
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
+		address = "http://" + address
+	}
+	forward_uri := address + "/" + strings.Join(route, "/")
+	if r.URL.RawQuery != "" {
+		forward_uri = forward_uri + "?" + r.URL.RawQuery
+	}
+	slog.Info("Forwarding request", "forward_uri", forward_uri)
+	// Forward the request to the resolved service
+	if err := forward_request(w, r, forward_uri); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+func forward_request(w http.ResponseWriter, r *http.Request, forward_uri string) error {
+	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
+	if err != nil {
+		return err
+	}
+	req.Header = r.Header
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	// Copy the response from the resolved service
+	for k, v := range resp.Header {
+		w.Header()[k] = v
+	}
+	w.WriteHeader(resp.StatusCode)
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Request) {
 	var rb RegisterBody
