@@ -4,11 +4,18 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/time/rate"
+)
+
+const (
+	MaxRequestsPerMinute = 100
 )
 
 type ServiceRegistry struct {
@@ -17,12 +24,14 @@ type ServiceRegistry struct {
 }
 
 func (sr *ServiceRegistry) Register(name string, address string) {
+	slog.Info("Registering service", "name", name, "address", address)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	sr.Services[name] = address
 }
 
 func (sr *ServiceRegistry) Deregister(name string) {
+	slog.Info("Deregistering service", "name", name)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	delete(sr.Services, name)
@@ -44,18 +53,61 @@ func NewServiceRegistry() *ServiceRegistry {
 	}
 }
 
-type RateLimiter struct{}
+type client struct {
+	limiter  *rate.Limiter
+	lastSeen time.Time
+}
 
-func (rl *RateLimiter) Allow() bool {
-	// TODO: Implement rate limiting
+type RateLimiter struct {
+	mu       sync.RWMutex
+	visitors map[string]*client
+}
+
+func (rl *RateLimiter) cleanupVisitors() {
+	for {
+		slog.Info("Cleaning up visitors")
+		time.Sleep(time.Minute)
+		rl.mu.Lock()
+		for ip, v := range rl.visitors {
+			if time.Since(v.lastSeen) > 2*time.Minute {
+				delete(rl.visitors, ip)
+			}
+		}
+		rl.mu.Unlock()
+	}
+}
+
+func (rl *RateLimiter) Allow(address string) bool {
+	rl.mu.Lock()
+	ip, _, err := net.SplitHostPort(address)
+	if err != nil {
+		slog.Error("Error splitting address", "error", err.Error())
+		return false
+	}
+
+	if _, found := rl.visitors[ip]; !found {
+		rl.visitors[ip] = &client{
+			limiter: rate.NewLimiter(rate.Every(time.Minute), MaxRequestsPerMinute),
+		}
+	}
+	rl.visitors[ip].lastSeen = time.Now()
+
+	if !rl.visitors[ip].limiter.Allow() {
+		rl.mu.Unlock()
+		return false
+	}
+	rl.mu.Unlock()
 	return true
 }
 
 func NewRateLimiter() *RateLimiter {
-	return &RateLimiter{}
+	return &RateLimiter{
+		visitors: make(map[string]*client),
+	}
 }
 
 func initializeRoutes(r *RequestHandler) *http.ServeMux {
+	go r.RateLimiter.cleanupVisitors()
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", r.HandleRoutes)
 	return mux
@@ -117,9 +169,21 @@ func resolve_path(path string) (string, []string) {
 	return parts[1], parts[2:]
 }
 
+func create_forward_uri(address string, route []string, query string) string {
+	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
+		address = "http://" + address
+	}
+	forward_uri := address + "/" + strings.Join(route, "/")
+	if query != "" {
+		forward_uri = forward_uri + "?" + query
+	}
+	return forward_uri
+}
+
 func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr *ServiceRegistry) {
 	slog.Info("Received request", "path", r.URL.Path, "method", r.Method)
-	if !rl.Allow() {
+	if !rl.Allow(r.RemoteAddr) {
+		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -131,20 +195,17 @@ func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr 
 
 	address := sr.GetAddress(service_name)
 	if address == "" {
+		slog.Error("Service not found", "service_name", service_name)
 		http.Error(w, "service not found", http.StatusNotFound)
 		return
 	}
 	// Create a new uri based on the resolved request
-	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
-		address = "http://" + address
-	}
-	forward_uri := address + "/" + strings.Join(route, "/")
-	if r.URL.RawQuery != "" {
-		forward_uri = forward_uri + "?" + r.URL.RawQuery
-	}
+	forward_uri := create_forward_uri(address, route, r.URL.RawQuery)
+
 	slog.Info("Forwarding request", "forward_uri", forward_uri)
 	// Forward the request to the resolved service
 	if err := forward_request(w, r, forward_uri); err != nil {
+		slog.Error("Error forwarding request", "error", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -177,12 +238,14 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 	var rb RegisterBody
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
+		slog.Error("Error decoding request", "error", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	sr.Register(rb.Name, rb.Address)
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
+		slog.Error("Error marshalling response", "error", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -195,12 +258,14 @@ func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Req
 	var db DeregisterBody
 	err := json.NewDecoder(r.Body).Decode(&db)
 	if err != nil {
+		slog.Error("Error decoding request", "error", err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	sr.Deregister(db.Name)
 	j, err := json.Marshal(DeregisterResponse{Message: "service " + db.Name + " deregistered"})
 	if err != nil {
+		slog.Error("Error marshalling response", "error", err.Error())
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -210,6 +275,7 @@ func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Req
 }
 
 func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Retrieved registered services")
 	j, err := json.Marshal(sr.Services)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -231,6 +297,6 @@ func main() {
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-	slog.Info("api gateway listening on port 8080")
+	slog.Info("API Gateway started", "port", 8080)
 	server.ListenAndServe()
 }
