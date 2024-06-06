@@ -9,10 +9,6 @@ import (
 	"golang.org/x/time/rate"
 )
 
-const (
-	MaxRequestsPerMinute = 100
-)
-
 type client struct {
 	limiter  *rate.Limiter
 	lastSeen time.Time
@@ -47,7 +43,7 @@ func (rl *RateLimiter) Allow(address string) bool {
 
 	if _, found := rl.visitors[ip]; !found {
 		rl.visitors[ip] = &client{
-			limiter: rate.NewLimiter(rate.Every(time.Minute), MaxRequestsPerMinute),
+			limiter: rate.NewLimiter(rate.Every(time.Minute), AppConfig.RateLimiter.MaxRequestsPerMinute),
 		}
 	}
 	rl.visitors[ip].lastSeen = time.Now()

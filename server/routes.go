@@ -35,6 +35,12 @@ func (rh *RequestHandler) HandleRoutes(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write([]byte("OK")); err != nil {
 			slog.Error("Error writing response", "error", err.Error())
 		}
+	case method == "GET" && path == "/config":
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
+			slog.Error("Error writing reponse", "error", err.Error())
+		}
 	default:
 		handle_request(w, r, rh.RateLimiter, rh.ServiceRegistry)
 	}

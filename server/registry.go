@@ -8,11 +8,6 @@ import (
 	"time"
 )
 
-const (
-	// should be loaded from config
-	HeartbeatInterval = 10
-)
-
 type RegisterBody struct {
 	Name    string `json:"name"`
 	Address string `json:"address"`
@@ -125,7 +120,7 @@ func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) 
 func (sr *ServiceRegistry) Heartbeat() {
 	for {
 		slog.Info("Heartbeating registered services")
-		time.Sleep(HeartbeatInterval * time.Second)
+		time.Sleep(time.Duration(AppConfig.Registry.HeartbeatInterval) * time.Second)
 		sr.mu.RLock()
 		for name, address := range sr.Services {
 			// TODO: /health should be replaced with a configurable endpoint

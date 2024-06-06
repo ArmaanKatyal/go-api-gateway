@@ -1,0 +1,9 @@
+server:
+  host: localhost
+  port: 8080
+  readTimeout: 10
+  writeTimeout: 10
+registry:
+  heartbeatInterval: 10
+ratelimiter:
+  maxRequestsPerMinute: 100
