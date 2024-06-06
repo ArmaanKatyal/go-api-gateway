@@ -19,6 +19,10 @@ type Conf struct {
 	}
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
+		Services          []struct {
+			Name string `yaml:"name"`
+			Addr string `yaml:"addr"`
+		}
 	}
 	RateLimiter struct {
 		MaxRequestsPerMinute int `yaml:"maxRequestsPerMinute"`

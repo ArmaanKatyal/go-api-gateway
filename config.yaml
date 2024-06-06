@@ -5,5 +5,8 @@ server:
   writeTimeout: 10
 registry:
   heartbeatInterval: 10
+  services:
+    - name: backend
+      addr: "localhost:3000"
 ratelimiter:
   maxRequestsPerMinute: 100

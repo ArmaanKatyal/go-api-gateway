@@ -54,10 +54,18 @@ func (sr *ServiceRegistry) GetAddress(name string) string {
 	return val
 }
 
+func populateRegistryServices(sr *ServiceRegistry) {
+	for _, v := range AppConfig.Registry.Services {
+		sr.Services[v.Name] = v.Addr
+	}
+}
+
 func NewServiceRegistry() *ServiceRegistry {
-	return &ServiceRegistry{
+	r := ServiceRegistry{
 		Services: make(map[string]string),
 	}
+	populateRegistryServices(&r)
+	return &r
 }
 
 func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Request) {
