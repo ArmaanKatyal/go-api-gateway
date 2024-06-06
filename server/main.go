@@ -20,5 +20,8 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 	slog.Info("API Gateway started", "port", 8080)
-	server.ListenAndServe()
+	err := server.ListenAndServe()
+	if err != nil {
+		slog.Error("Error starting server", "error", err.Error())
+	}
 }

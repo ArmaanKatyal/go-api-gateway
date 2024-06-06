@@ -32,7 +32,9 @@ func (rh *RequestHandler) HandleRoutes(w http.ResponseWriter, r *http.Request) {
 		rh.ServiceRegistry.Get_services(w, r)
 	case method == "GET" && path == "/health":
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		if _, err := w.Write([]byte("OK")); err != nil {
+			slog.Error("Error writing response", "error", err.Error())
+		}
 	default:
 		handle_request(w, r, rh.RateLimiter, rh.ServiceRegistry)
 	}

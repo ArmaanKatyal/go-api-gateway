@@ -76,7 +76,9 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(j)
+	if _, err := w.Write(j); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
+	}
 }
 
 func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +98,9 @@ func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Req
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(j)
+	if _, err := w.Write(j); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
+	}
 }
 
 func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) {
@@ -107,5 +111,7 @@ func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(j)
+	if _, err := w.Write(j); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
+	}
 }
