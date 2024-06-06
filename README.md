@@ -4,7 +4,7 @@ A sample API Gateway built in Go (work in progress) for learning purposes.
 
 Features:
 
--   [ ] URL Rewriting
+-   [x] URL Rewriting
 -   [ ] Load Balancing
 -   [ ] Rate Limiting / Throttling / Quotas
 -   [ ] Caching

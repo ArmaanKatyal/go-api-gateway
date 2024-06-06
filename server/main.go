@@ -12,7 +12,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	rh := NewRequestHandler()
-	router := initializeRoutes(rh)
+	router := InitializeRoutes(rh)
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      router,

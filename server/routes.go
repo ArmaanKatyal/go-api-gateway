@@ -40,8 +40,10 @@ func (rh *RequestHandler) HandleRoutes(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func initializeRoutes(r *RequestHandler) *http.ServeMux {
+func InitializeRoutes(r *RequestHandler) *http.ServeMux {
+	go r.ServiceRegistry.Heartbeat()
 	go r.RateLimiter.cleanupVisitors()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", r.HandleRoutes)
 	return mux
