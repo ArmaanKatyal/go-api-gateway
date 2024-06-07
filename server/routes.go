@@ -19,30 +19,18 @@ func NewRequestHandler() *RequestHandler {
 	}
 }
 
-func (rh *RequestHandler) HandleRoutes(w http.ResponseWriter, r *http.Request) {
-	path := r.URL.Path
-	method := r.Method
+func health(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("OK")); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
+	}
+}
 
-	switch {
-	case method == "POST" && path == "/services/register":
-		rh.ServiceRegistry.Register_service(w, r)
-	case method == "POST" && path == "/services/deregister":
-		rh.ServiceRegistry.Deregister_service(w, r)
-	case method == "GET" && path == "/services":
-		rh.ServiceRegistry.Get_services(w, r)
-	case method == "GET" && path == "/health":
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write([]byte("OK")); err != nil {
-			slog.Error("Error writing response", "error", err.Error())
-		}
-	case method == "GET" && path == "/config":
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
-			slog.Error("Error writing reponse", "error", err.Error())
-		}
-	default:
-		handle_request(w, r, rh.RateLimiter, rh.ServiceRegistry)
+func config(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
 	}
 }
 
@@ -51,7 +39,12 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.RateLimiter.cleanupVisitors()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/", r.HandleRoutes)
+	mux.HandleFunc("POST /services/register", r.ServiceRegistry.Register_service)
+	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.Deregister_service)
+	mux.HandleFunc("GET /services", r.ServiceRegistry.Get_services)
+	mux.HandleFunc("GET /health", health)
+	mux.HandleFunc("GET /config", config)
+	mux.HandleFunc("/", r.handle_request)
 	return mux
 }
 
@@ -74,9 +67,9 @@ func create_forward_uri(address string, route []string, query string) string {
 	return forward_uri
 }
 
-func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr *ServiceRegistry) {
+func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Received request", "path", r.URL.Path, "method", r.Method)
-	if !rl.Allow(r.RemoteAddr) {
+	if !rh.RateLimiter.Allow(r.RemoteAddr) {
 		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
@@ -87,7 +80,7 @@ func handle_request(w http.ResponseWriter, r *http.Request, rl *RateLimiter, sr 
 
 	slog.Info("Resolving service", "service_name", service_name)
 
-	address := sr.GetAddress(service_name)
+	address := rh.ServiceRegistry.GetAddress(service_name)
 	if address == "" {
 		slog.Error("Service not found", "service_name", service_name)
 		http.Error(w, "service not found", http.StatusNotFound)
