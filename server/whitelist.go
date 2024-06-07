@@ -1,13 +1,17 @@
 package main
 
 type IPWhiteList struct {
-	// TODO: Maybe have an option Allow ALL that would disable the whitelist
 	whitelist map[string]bool
 }
 
 func populateWhiteList(w *IPWhiteList, iplist []string) {
-	for _, ip := range iplist {
-		w.whitelist[ip] = true
+	if len(iplist) == 0 {
+		// Allow all ip ranges, but this only works if whitelist is empty in the config
+		w.whitelist["ALL"] = true
+	} else {
+		for _, ip := range iplist {
+			w.whitelist[ip] = true
+		}
 	}
 }
 
@@ -19,6 +23,9 @@ func NewIPWhiteList() *IPWhiteList {
 }
 
 func (w *IPWhiteList) Allowed(ip string) bool {
+	if _, exists := w.whitelist["ALL"]; exists {
+		return true
+	}
 	if _, found := w.whitelist[ip]; !found {
 		return false
 	}

@@ -22,9 +22,9 @@ type RateLimiter struct {
 // cleanupVisitors removes visitors that haven't been seen in the last 2 minutes
 func (rl *RateLimiter) cleanupVisitors() {
 	for {
-		slog.Info("Cleaning up visitors")
 		time.Sleep(time.Minute)
 		rl.mu.Lock()
+		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
 			if time.Since(v.lastSeen) > 2*time.Minute {
 				delete(rl.visitors, ip)

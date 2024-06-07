@@ -4,7 +4,7 @@ server:
   readTimeout: 5
   writeTimeout: 10
 registry:
-  heartbeatInterval: 10
+  heartbeatInterval: 30
   services:
     - name: backend
       addr: "localhost:3000"

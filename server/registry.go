@@ -161,9 +161,9 @@ func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) 
 // Heartbeat checks the health of the registered services
 func (sr *ServiceRegistry) Heartbeat() {
 	for {
-		slog.Info("Heartbeating registered services")
 		time.Sleep(time.Duration(AppConfig.Registry.HeartbeatInterval) * time.Second)
 		sr.mu.RLock()
+		slog.Info("Heartbeating registered services")
 		for name, prop := range sr.Services {
 			// TODO: /health should be replaced with a configurable endpoint
 			// provided by the service in registration/config
