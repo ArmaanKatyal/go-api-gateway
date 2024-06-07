@@ -14,6 +14,12 @@ type RegisterBody struct {
 	Address string `json:"address"`
 }
 
+type UpdateBody struct {
+	Name      string   `json:"name"`
+	Addr      string   `json:"addr"`
+	WhiteList []string `json:"whitelist"`
+}
+
 type RegisterResponse struct {
 	Message string `json:"message"`
 }
@@ -40,9 +46,24 @@ func (sr *ServiceRegistry) Register(name string, address string) {
 	slog.Info("Registering service", "name", name, "address", address)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
+	if _, ok := sr.Services[name]; ok {
+		slog.Error("service already exists", "name", name)
+	}
 	sr.Services[name] = Service{
 		Addr:      address,
 		WhiteList: NewIPWhiteList(),
+	}
+}
+
+func (sr *ServiceRegistry) Update(name string, updated *Service) {
+	slog.Info("Updating registered service", "name", name)
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	if _, ok := sr.Services[name]; ok {
+		sr.Services[name] = Service{
+			Addr:      updated.Addr,
+			WhiteList: updated.WhiteList,
+		}
 	}
 }
 
@@ -61,6 +82,13 @@ func (sr *ServiceRegistry) GetAddress(name string) string {
 		return ""
 	}
 	return val.Addr
+}
+
+func (sr *ServiceRegistry) GetService(name string) *Service {
+	if v, ok := sr.Services[name]; ok {
+		return &v
+	}
+	return nil
 }
 
 // CheckWhiteList checks if the ip is allowed to access the service
@@ -117,6 +145,35 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(j); err != nil {
+		slog.Error("Error writing response", "error", err.Error())
+	}
+}
+
+// Update_service updates a existing service in the registry
+func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request) {
+	var ub UpdateBody
+	err := json.NewDecoder(r.Body).Decode(&ub)
+	if err != nil {
+		slog.Error("Error decoding request", "error", err.Error())
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s := sr.GetService(ub.Name)
+	if s == nil {
+		slog.Error("Defined service doesn't exists")
+		http.Error(w, "service doesn't exists", http.StatusBadRequest)
+		return
+	}
+	// modify the address
+	s.Addr = ub.Addr
+	// add the new whitelisted ip
+	for _, v := range ub.WhiteList {
+		s.WhiteList.Whitelist[v] = true
+	}
+	sr.Update(ub.Name, s)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte("service updated successfully")); err != nil {
 		slog.Error("Error writing response", "error", err.Error())
 	}
 }

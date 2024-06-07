@@ -11,6 +11,6 @@ Features:
 -   [ ] SSL Termination
 -   [ ] Orchestration/Aggregation
 -   [ ] Protocol Translation
--   [ ] IP Whitelisting
+-   [x] IP Whitelisting
 -   [ ] Retry Policy, Circuit Breaker
 -   [ ] Logging, Tracing

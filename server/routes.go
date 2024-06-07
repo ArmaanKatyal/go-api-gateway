@@ -45,6 +45,7 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	mux.HandleFunc("POST /services/register", r.ServiceRegistry.Register_service)
 	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.Deregister_service)
 	mux.HandleFunc("GET /services", r.ServiceRegistry.Get_services)
+	mux.HandleFunc("POST /services/update", r.ServiceRegistry.Update_service)
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /config", config)
 	mux.HandleFunc("/", r.handle_request)

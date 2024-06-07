@@ -9,6 +9,6 @@ registry:
     - name: backend
       addr: "localhost:3000"
       whitelist:
-        - "::1"
+        - "ALL"
 ratelimiter:
   maxRequestsPerMinute: 100
