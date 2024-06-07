@@ -20,8 +20,9 @@ type Conf struct {
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
 		Services          []struct {
-			Name string `yaml:"name"`
-			Addr string `yaml:"addr"`
+			Name      string   `yaml:"name"`
+			Addr      string   `yaml:"addr"`
+			WhiteList []string `yaml:"whitelist"`
 		}
 	}
 	RateLimiter struct {
@@ -29,10 +30,7 @@ type Conf struct {
 	}
 }
 
-func (c *Conf) GetConf() *Conf {
-	return c
-}
-
+// GetConfMarshal returns the configuration as a json byte array
 func (c *Conf) GetConfMarshal() []byte {
 	out, err := json.Marshal(c)
 	if err != nil {
@@ -41,6 +39,27 @@ func (c *Conf) GetConfMarshal() []byte {
 	return out
 }
 
+// Verify checks if the configuration is valid
+func (c *Conf) Verify() bool {
+	if c.Server.Host == "" || c.Server.Port == "" {
+		return false
+	}
+	if c.Server.ReadTimeout == 0 {
+		c.Server.ReadTimeout = 5
+	}
+	if c.Server.WriteTimeout == 0 {
+		c.Server.WriteTimeout = 10
+	}
+	if c.Registry.HeartbeatInterval == 0 {
+		c.Registry.HeartbeatInterval = 30
+	}
+	if c.RateLimiter.MaxRequestsPerMinute == 0 {
+		c.RateLimiter.MaxRequestsPerMinute = 100
+	}
+	return true
+}
+
+// LoadConf loads the configuration from the config.yaml file
 func LoadConf() {
 	c := Conf{}
 	yamlFile, err := os.ReadFile("config.yaml")
@@ -50,6 +69,10 @@ func LoadConf() {
 	err = yaml.Unmarshal(yamlFile, &c)
 	if err != nil {
 		slog.Error("yaml unmarshal error ocurred", "error", err.Error())
+		os.Exit(1)
+	}
+	if !c.Verify() {
+		slog.Error("Config verification failed")
 		os.Exit(1)
 	}
 	AppConfig = c

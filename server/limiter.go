@@ -19,6 +19,7 @@ type RateLimiter struct {
 	visitors map[string]*client
 }
 
+// cleanupVisitors removes visitors that haven't been seen in the last 2 minutes
 func (rl *RateLimiter) cleanupVisitors() {
 	for {
 		slog.Info("Cleaning up visitors")
@@ -33,6 +34,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 	}
 }
 
+// Allow checks if the visitor is allowed to make a request
 func (rl *RateLimiter) Allow(address string) bool {
 	rl.mu.Lock()
 	ip, _, err := net.SplitHostPort(address)

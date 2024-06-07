@@ -1,12 +1,14 @@
 server:
   host: localhost
   port: 8080
-  readTimeout: 10
+  readTimeout: 5
   writeTimeout: 10
 registry:
   heartbeatInterval: 10
   services:
     - name: backend
       addr: "localhost:3000"
+      whitelist:
+        - "::1"
 ratelimiter:
   maxRequestsPerMinute: 100
