@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 type RequestHandler struct {
@@ -115,6 +117,8 @@ func forward_request(w http.ResponseWriter, r *http.Request, forward_uri string)
 		return err
 	}
 	req.Header = r.Header
+	// add a unique trace id to every request for tracing
+	req.Header.Add("X-Trace-Id", uuid.NewString())
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

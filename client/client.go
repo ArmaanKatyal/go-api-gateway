@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -14,6 +15,7 @@ func main() {
 	e.Use(middleware.Recover())
 	e.Logger.SetLevel(log.INFO)
 	e.GET("/", func(c echo.Context) error {
+		slog.Info("Logging TraceID", "traceID", c.Request().Header.Get("X-Trace-ID"))
 		return c.String(http.StatusOK, "Hello World! from client")
 	})
 	e.GET("/health", func(c echo.Context) error {

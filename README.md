@@ -6,7 +6,7 @@ Features:
 
 -   [x] URL Rewriting
 -   [ ] Load Balancing
--   [ ] Rate Limiting / Throttling / Quotas
+-   [x] Rate Limiting / Throttling / Quotas
 -   [ ] Caching
 -   [ ] SSL Termination
 -   [ ] Orchestration/Aggregation

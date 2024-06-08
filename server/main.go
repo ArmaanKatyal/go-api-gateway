@@ -8,7 +8,13 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	opts := PrettyHandlerOptions{
+		SlogOpts: slog.HandlerOptions{
+			Level: slog.LevelDebug,
+		},
+	}
+	handler := NewPrettyHandler(os.Stdout, opts)
+	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
 	LoadConf()
@@ -20,7 +26,7 @@ func main() {
 		ReadTimeout:  time.Duration(AppConfig.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(AppConfig.Server.WriteTimeout) * time.Second,
 	}
-	slog.Info("API Gateway started", "port", 8080)
+	slog.Info("API Gateway started", "port", AppConfig.Server.Port)
 	err := server.ListenAndServe()
 	if err != nil {
 		slog.Error("Error starting server", "error", err.Error())
