@@ -40,7 +40,7 @@ func (h *PrettyHandler) Handle(ctx context.Context, r slog.Record) error {
 		return true
 	})
 
-	b, err := json.MarshalIndent(fields, "", "  ")
+	b, err := json.Marshal(fields)
 	if err != nil {
 		return err
 	}

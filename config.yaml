@@ -4,11 +4,12 @@ server:
   readTimeout: 5
   writeTimeout: 10
 registry:
-  heartbeatInterval: 30
+  heartbeatInterval: 15
   services:
     - name: backend
       addr: "localhost:3000"
       whitelist:
         - "ALL"
+      fallbackUri: "localhost:3001"
 ratelimiter:
   maxRequestsPerMinute: 100

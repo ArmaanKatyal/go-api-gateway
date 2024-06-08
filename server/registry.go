@@ -9,9 +9,11 @@ import (
 	"time"
 )
 
+// Note: try to keep it consistent with the config struct
 type RegisterBody struct {
-	Name    string `json:"name"`
-	Address string `json:"address"`
+	Name        string `json:"name"`
+	Address     string `json:"address"`
+	FallbackUri string `json:"fallbackUri"`
 }
 
 type UpdateBody struct {
@@ -33,26 +35,25 @@ type DeregisterResponse struct {
 }
 
 type Service struct {
-	Addr      string       `json:"addr"`
-	WhiteList *IPWhiteList `json:"ipWhiteList"`
+	Addr           string       `json:"addr"`
+	FallbackUri    string       `json:"fallbackUri"`
+	IPWhiteList    *IPWhiteList `json:"ipwhitelist"`
+	CircuitBreaker *CircuitBreaker
 }
 
 type ServiceRegistry struct {
 	mu       sync.RWMutex
-	Services map[string]Service `json:"services"`
+	Services map[string]*Service `json:"services"`
 }
 
-func (sr *ServiceRegistry) Register(name string, address string) {
-	slog.Info("Registering service", "name", name, "address", address)
+func (sr *ServiceRegistry) Register(name string, s *Service) {
+	slog.Info("Registering service", "name", name, "address", s.Addr)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	if _, ok := sr.Services[name]; ok {
 		slog.Error("service already exists", "name", name)
 	}
-	sr.Services[name] = Service{
-		Addr:      address,
-		WhiteList: NewIPWhiteList(),
-	}
+	sr.Services[name] = s
 }
 
 func (sr *ServiceRegistry) Update(name string, updated *Service) {
@@ -60,10 +61,7 @@ func (sr *ServiceRegistry) Update(name string, updated *Service) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	if _, ok := sr.Services[name]; ok {
-		sr.Services[name] = Service{
-			Addr:      updated.Addr,
-			WhiteList: updated.WhiteList,
-		}
+		sr.Services[name] = updated
 	}
 }
 
@@ -86,7 +84,7 @@ func (sr *ServiceRegistry) GetAddress(name string) string {
 
 func (sr *ServiceRegistry) GetService(name string) *Service {
 	if v, ok := sr.Services[name]; ok {
-		return &v
+		return v
 	}
 	return nil
 }
@@ -103,7 +101,7 @@ func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error)
 	if !ok {
 		return false, nil
 	}
-	return val.WhiteList.Allowed(ip), nil
+	return val.IPWhiteList.Allowed(ip), nil
 }
 
 // populateRegistryServices populates the service registry with the services in the configuration
@@ -111,16 +109,19 @@ func populateRegistryServices(sr *ServiceRegistry) {
 	for _, v := range AppConfig.Registry.Services {
 		w := NewIPWhiteList()
 		populateWhiteList(w, v.WhiteList)
-		sr.Services[v.Name] = Service{
-			Addr:      v.Addr,
-			WhiteList: w,
+		// Note: new fields for service in the config must be added here
+		sr.Services[v.Name] = &Service{
+			Addr:           v.Addr,
+			FallbackUri:    v.FallbackUri,
+			IPWhiteList:    w,
+			CircuitBreaker: NewCircuitBreaker(),
 		}
 	}
 }
 
 func NewServiceRegistry() *ServiceRegistry {
 	r := ServiceRegistry{
-		Services: make(map[string]Service),
+		Services: make(map[string]*Service),
 	}
 	populateRegistryServices(&r)
 	return &r
@@ -135,7 +136,12 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	sr.Register(rb.Name, rb.Address)
+	sr.Register(rb.Name, &Service{
+		Addr:           rb.Address,
+		FallbackUri:    rb.FallbackUri,
+		IPWhiteList:    NewIPWhiteList(),
+		CircuitBreaker: NewCircuitBreaker(),
+	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
 		slog.Error("Error marshalling response", "error", err.Error())
@@ -168,7 +174,7 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 	s.Addr = ub.Addr
 	// add the new whitelisted ip
 	for _, v := range ub.WhiteList {
-		s.WhiteList.Whitelist[v] = true
+		s.IPWhiteList.Whitelist[v] = true
 	}
 	sr.Update(ub.Name, s)
 	w.Header().Set("Content-Type", "application/json")
@@ -230,7 +236,7 @@ func (sr *ServiceRegistry) Heartbeat() {
 				continue
 			}
 			if resp.StatusCode != http.StatusOK {
-				slog.Error("Service is unhealthy", "name", name, "address", prop.Addr)
+				slog.Warn("Service is unhealthy", "name", name, "address", prop.Addr)
 			}
 			resp.Body.Close()
 		}

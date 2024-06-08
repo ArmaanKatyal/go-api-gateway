@@ -20,9 +20,10 @@ type Conf struct {
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
 		Services          []struct {
-			Name      string   `yaml:"name"`
-			Addr      string   `yaml:"addr"`
-			WhiteList []string `yaml:"whitelist"`
+			Name        string   `yaml:"name"`
+			Addr        string   `yaml:"addr"`
+			WhiteList   []string `yaml:"whitelist"`
+			FallbackUri string   `yaml:"fallbackUri"`
 		}
 	}
 	RateLimiter struct {
