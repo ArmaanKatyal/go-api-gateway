@@ -12,5 +12,6 @@ Features:
 -   [ ] Orchestration/Aggregation
 -   [ ] Protocol Translation
 -   [x] IP Whitelisting
--   [ ] Retry Policy, Circuit Breaker
--   [ ] Logging, Tracing
+-   [x] Circuit Breaker
+-   [x] Logging
+-   [ ] Tracing
