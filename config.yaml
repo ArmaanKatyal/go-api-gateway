@@ -3,6 +3,10 @@ server:
   port: 8080
   readTimeout: 5
   writeTimeout: 10
+  circuitbreaker:
+    enabled: true
+    timeout: 5
+    interval: 0
 registry:
   heartbeatInterval: 15
   services:
@@ -12,4 +16,5 @@ registry:
         - "ALL"
       fallbackUri: "localhost:3001"
 ratelimiter:
-  maxRequestsPerMinute: 100
+  enabled: true
+  maxRequestsPerMinute: 500

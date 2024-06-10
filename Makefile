@@ -14,7 +14,7 @@ tidy:
 	go mod tidy
 
 client: build_client
-	./bin/client
+	# ./bin/client
 
 build_client:
 	go build -o bin/client ./client

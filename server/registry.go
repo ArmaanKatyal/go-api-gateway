@@ -89,6 +89,16 @@ func (sr *ServiceRegistry) GetService(name string) *Service {
 	return nil
 }
 
+func (sr *ServiceRegistry) GetFallbackUri(name string) string {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	val, ok := sr.Services[name]
+	if !ok {
+		return ""
+	}
+	return val.FallbackUri
+}
+
 // CheckWhiteList checks if the ip is allowed to access the service
 func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error) {
 	ip, _, err := net.SplitHostPort(addr)
@@ -114,7 +124,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			Addr:           v.Addr,
 			FallbackUri:    v.FallbackUri,
 			IPWhiteList:    w,
-			CircuitBreaker: NewCircuitBreaker(),
+			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
 		}
 	}
 }
@@ -140,7 +150,7 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 		Addr:           rb.Address,
 		FallbackUri:    rb.FallbackUri,
 		IPWhiteList:    NewIPWhiteList(),
-		CircuitBreaker: NewCircuitBreaker(),
+		CircuitBreaker: NewCircuitBreaker(DefaultSettings(rb.Name)),
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {

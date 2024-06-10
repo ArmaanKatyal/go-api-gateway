@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -9,7 +11,12 @@ import (
 	"github.com/labstack/gommon/log"
 )
 
+var Port int
+
 func main() {
+	flag.IntVar(&Port, "port", 3000, "Port to listen on")
+	flag.Parse()
+
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
@@ -21,7 +28,7 @@ func main() {
 	e.GET("/health", func(c echo.Context) error {
 		return c.String(http.StatusOK, "OK")
 	})
-	if err := e.Start(":3000"); err != nil && err != http.ErrServerClosed {
+	if err := e.Start(":" + fmt.Sprint(Port)); err != nil && err != http.ErrServerClosed {
 		e.Logger.Fatal("shutting down the server")
 	}
 }

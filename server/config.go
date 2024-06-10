@@ -12,10 +12,15 @@ var AppConfig Conf
 
 type Conf struct {
 	Server struct {
-		Host         string `yaml:"host"`
-		Port         string `yaml:"port"`
-		ReadTimeout  int    `yaml:"readTimeout"`
-		WriteTimeout int    `yaml:"writeTimeout"`
+		Host           string `yaml:"host"`
+		Port           string `yaml:"port"`
+		ReadTimeout    int    `yaml:"readTimeout"`
+		WriteTimeout   int    `yaml:"writeTimeout"`
+		CircuitBreaker struct {
+			Enabled  bool `yaml:"enabled"`
+			Timeout  int  `yaml:"timeout"`
+			Interval int  `yaml:"interval"`
+		}
 	}
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
@@ -27,7 +32,8 @@ type Conf struct {
 		}
 	}
 	RateLimiter struct {
-		MaxRequestsPerMinute int `yaml:"maxRequestsPerMinute"`
+		Enabled              bool `yaml:"enabled"`
+		MaxRequestsPerMinute int  `yaml:"maxRequestsPerMinute"`
 	}
 }
 
@@ -56,6 +62,12 @@ func (c *Conf) Verify() bool {
 	}
 	if c.RateLimiter.MaxRequestsPerMinute == 0 {
 		c.RateLimiter.MaxRequestsPerMinute = 100
+	}
+	if c.Server.CircuitBreaker.Timeout == 0 {
+		c.Server.CircuitBreaker.Timeout = 10
+	}
+	if c.Server.CircuitBreaker.Interval == 0 {
+		c.Server.CircuitBreaker.Interval = 10
 	}
 	return true
 }
