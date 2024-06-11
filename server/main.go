@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"time"
 )
 
@@ -27,8 +29,21 @@ func main() {
 		WriteTimeout: time.Duration(AppConfig.Server.WriteTimeout) * time.Second,
 	}
 	slog.Info("API Gateway started", "port", AppConfig.Server.Port)
-	err := server.ListenAndServe()
-	if err != nil {
-		slog.Error("Error starting server", "error", err.Error())
+	go func() {
+		if err := server.ListenAndServe(); err != nil {
+			slog.Error("Error starting server", "error", err.Error())
+			os.Exit(1)
+		}
+	}()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+
+	<-stop
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(AppConfig.Server.GracefulTimeout)*time.Second)
+	defer cancel()
+	slog.Info("Gracefully shutting down server")
+	if err := server.Shutdown(ctx); err != nil {
+		slog.Error("Error shutting down server", "error", err.Error())
+		os.Exit(1)
 	}
 }

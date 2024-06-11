@@ -12,11 +12,12 @@ var AppConfig Conf
 
 type Conf struct {
 	Server struct {
-		Host           string `yaml:"host"`
-		Port           string `yaml:"port"`
-		ReadTimeout    int    `yaml:"readTimeout"`
-		WriteTimeout   int    `yaml:"writeTimeout"`
-		CircuitBreaker struct {
+		Host            string `yaml:"host"`
+		Port            string `yaml:"port"`
+		ReadTimeout     int    `yaml:"readTimeout"`
+		WriteTimeout    int    `yaml:"writeTimeout"`
+		GracefulTimeout int    `yaml:"gracefulTimeout"`
+		CircuitBreaker  struct {
 			Enabled  bool `yaml:"enabled"`
 			Timeout  int  `yaml:"timeout"`
 			Interval int  `yaml:"interval"`
