@@ -24,8 +24,40 @@ func NewRequestHandler() *RequestHandler {
 	}
 }
 
+// RequestToMap converts the request to a map
+func RequestToMap(r *http.Request) map[string]interface{} {
+	result := make(map[string]interface{})
+
+	result["method"] = r.Method
+
+	result["url"] = r.URL.String()
+
+	headers := make(map[string]string)
+	for name, values := range r.Header {
+		headers[name] = values[0] // Use the first value for each header
+	}
+	result["headers"] = headers
+
+	queryParams := make(map[string]string)
+	for name, values := range r.URL.Query() {
+		queryParams[name] = values[0] // Use the first value for each query parameter
+	}
+	result["query_params"] = queryParams
+
+	if err := r.ParseForm(); err == nil {
+		formValues := make(map[string]string)
+		for name, values := range r.Form {
+			formValues[name] = values[0] // Use the first value for each form field
+		}
+		result["form_values"] = formValues
+	}
+
+	return result
+}
+
 // health is a simple health check endpoint
 func health(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Health check", "req", RequestToMap(r))
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("OK")); err != nil {
 		slog.Error("Error writing response", "error", err.Error())
@@ -34,6 +66,7 @@ func health(w http.ResponseWriter, r *http.Request) {
 
 // config returns the application configuration
 func config(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Get config", "req", RequestToMap(r))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
@@ -88,15 +121,15 @@ func (rh *RequestHandler) create_forward_uri(address string, route []string, que
 
 // handle_request handles the incoming request and forwards it to the resolved service
 func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Received request", "path", r.URL.Path, "method", r.Method)
+	slog.Info("Received request", "req", RequestToMap(r))
 	service_name, route := rh.resolve_path(r.URL.Path)
 	if ok, err := rh.ServiceRegistry.IsWhitelisted(service_name, r.RemoteAddr); !ok || err != nil {
-		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr)
+		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
 	if rh.rateLimiterEnabled() && !rh.RateLimiter.Allow(r.RemoteAddr) {
-		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr)
+		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
@@ -113,17 +146,18 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 	// Create a new uri based on the resolved request
 	forward_uri := rh.create_forward_uri(address, route, r.URL.RawQuery)
 
-	slog.Info("Forwarding request", "forward_uri", forward_uri)
+	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", service_name)
 	service := rh.ServiceRegistry.GetService(service_name)
 
 	var err error
+	// Forward the request with or without circuit breaker
 	if rh.circuitBreakerEnabled() {
 		err = rh.forward_request_cb(w, r, forward_uri, service.CircuitBreaker, service_name)
 	} else {
 		err = rh.forward_request(w, r, forward_uri)
 	}
 	if err != nil {
-		slog.Error("Error forwarding request", "error", err.Error())
+		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
@@ -153,6 +187,7 @@ func (rh *RequestHandler) forward_request(w http.ResponseWriter, r *http.Request
 	return nil
 }
 
+// cloneHeader clones the header
 func cloneHeader(h http.Header) http.Header {
 	cloned := make(http.Header, len(h))
 	for k, v := range h {
@@ -161,6 +196,7 @@ func cloneHeader(h http.Header) http.Header {
 	return cloned
 }
 
+// copyResponseHeaders copies the response headers
 func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 	for k, v := range resp.Header {
 		w.Header()[k] = v
@@ -223,7 +259,7 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 	slog.Error("Circuit breaker is open, making a fallback request", "service", service)
 	fallbackURI := rh.ServiceRegistry.GetFallbackUri(service)
 	if fallbackURI == "" {
-		slog.Error("Fallback URI not found", "service", service)
+		slog.Error("Fallback URI not found", "service_name", service)
 		return nil
 	}
 

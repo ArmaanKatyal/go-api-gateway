@@ -5,8 +5,8 @@ A sample API Gateway built in Go (work in progress) for learning purposes.
 Features:
 
 -   [x] URL Rewriting
--   [ ] Load Balancing
 -   [x] Rate Limiting / Throttling / Quotas
+-   [ ] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
 -   [ ] Caching
 -   [ ] SSL Termination
 -   [ ] Orchestration/Aggregation

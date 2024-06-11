@@ -89,4 +89,5 @@ func LoadConf() {
 		os.Exit(1)
 	}
 	AppConfig = c
+	slog.Info("Config loaded successfully")
 }

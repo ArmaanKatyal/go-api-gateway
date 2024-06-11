@@ -116,6 +116,7 @@ func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error)
 
 // populateRegistryServices populates the service registry with the services in the configuration
 func populateRegistryServices(sr *ServiceRegistry) {
+	slog.Info("Populating registry services")
 	for _, v := range AppConfig.Registry.Services {
 		w := NewIPWhiteList()
 		populateWhiteList(w, v.WhiteList)
@@ -139,6 +140,7 @@ func NewServiceRegistry() *ServiceRegistry {
 
 // Register_service registers a service with the registry
 func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Registering service", "req", RequestToMap(r))
 	var rb RegisterBody
 	err := json.NewDecoder(r.Body).Decode(&rb)
 	if err != nil {
@@ -167,6 +169,7 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 
 // Update_service updates a existing service in the registry
 func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Updating service", "req", RequestToMap(r))
 	var ub UpdateBody
 	err := json.NewDecoder(r.Body).Decode(&ub)
 	if err != nil {
@@ -196,6 +199,7 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 
 // Deregister_service deregisters a service from the registry
 func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Request) {
+	slog.Info("Deregistering service", "req", RequestToMap(r))
 	var db DeregisterBody
 	err := json.NewDecoder(r.Body).Decode(&db)
 	if err != nil {
@@ -219,7 +223,7 @@ func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Req
 
 // Get_services returns the registered services
 func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Retrieved registered services")
+	slog.Info("Retrieved registered services", "req", RequestToMap(r))
 	j, err := json.Marshal(sr.Services)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
