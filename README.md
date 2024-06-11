@@ -1,6 +1,6 @@
 # GO-API-Gateway
 
-A sample API Gateway built in Go (work in progress) for learning purposes.
+An API Gateway built in Go (work in progress) for learning purposes.
 
 Features:
 
