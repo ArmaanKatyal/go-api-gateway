@@ -14,7 +14,9 @@ tidy:
 	go mod tidy
 
 client: build_client
-	# ./bin/client
+	./bin/client --port 3000
+client2:
+	./bin/client --port 3001
 
 build_client:
 	go build -o bin/client ./client

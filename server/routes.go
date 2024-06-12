@@ -134,6 +134,18 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	// TODO: Authenticate the request
+	if err := rh.ServiceRegistry.Authenticate(service_name, r); err != nil {
+		switch err {
+		case ErrTokenMissing:
+			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			http.Error(w, "token missing", http.StatusUnauthorized)
+			return
+		case ErrInvalidToken:
+			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			http.Error(w, "invalid token", http.StatusUnauthorized)
+			return
+		}
+	}
 
 	slog.Info("Resolving service", "service_name", service_name)
 
@@ -169,6 +181,9 @@ func (rh *RequestHandler) forward_request(w http.ResponseWriter, r *http.Request
 		return err
 	}
 	req.Header = cloneHeader(r.Header)
+
+	// TODO: maybe attach claims from request context to the forwarded request context or header
+
 	// add a unique trace id to every request for tracing
 	req.Header.Add("X-Trace-Id", uuid.NewString())
 	client := &http.Client{}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -34,11 +35,21 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
+type ServiceAuth interface {
+	Authenticate(string, *http.Request) AuthError
+	IsEnabled() bool
+}
+
 type Service struct {
-	Addr           string       `json:"addr"`
-	FallbackUri    string       `json:"fallbackUri"`
-	IPWhiteList    *IPWhiteList `json:"ipwhitelist"`
-	CircuitBreaker *CircuitBreaker
+	Addr           string          `json:"addr"`
+	FallbackUri    string          `json:"fallbackUri"`
+	IPWhiteList    *IPWhiteList    `json:"ipwhitelist"`
+	CircuitBreaker *CircuitBreaker `json:"circuitBreaker"`
+	Auth           ServiceAuth     `json:"auth"`
+}
+
+func (s *Service) IsAuthEnabled() bool {
+	return s.Auth.IsEnabled()
 }
 
 type ServiceRegistry struct {
@@ -114,6 +125,16 @@ func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error)
 	return val.IPWhiteList.Allowed(ip), nil
 }
 
+func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
+	val, ok := sr.Services[name]
+	if !ok {
+		return errors.New("service not found")
+	}
+	return val.Auth.Authenticate(name, r)
+}
+
 // populateRegistryServices populates the service registry with the services in the configuration
 func populateRegistryServices(sr *ServiceRegistry) {
 	slog.Info("Populating registry services")
@@ -126,6 +147,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			FallbackUri:    v.FallbackUri,
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
+			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Routes),
 		}
 	}
 }
