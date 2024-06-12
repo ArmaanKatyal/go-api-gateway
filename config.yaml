@@ -16,6 +16,10 @@ registry:
       whitelist:
         - "ALL"
       fallbackUri: "localhost:3001"
+      auth:
+        enabled: true
+        routes:
+          - "/private"
 ratelimiter:
   enabled: true
   maxRequestsPerMinute: 500

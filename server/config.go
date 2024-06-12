@@ -30,6 +30,10 @@ type Conf struct {
 			Addr        string   `yaml:"addr"`
 			WhiteList   []string `yaml:"whitelist"`
 			FallbackUri string   `yaml:"fallbackUri"`
+			Auth        struct {
+				Enabled bool     `yaml:"enabled"`
+				Routes  []string `yaml:"routes"`
+			}
 		}
 	}
 	RateLimiter struct {
