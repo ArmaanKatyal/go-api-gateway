@@ -10,17 +10,27 @@ import (
 	"time"
 )
 
-// Note: try to keep it consistent with the config struct
+// Note: try to keep it consistent with the conf.registry.services struct
 type RegisterBody struct {
-	Name        string `json:"name"`
-	Address     string `json:"address"`
-	FallbackUri string `json:"fallbackUri"`
+	Name        string   `json:"name"`
+	Address     string   `json:"addr"`
+	WhiteList   []string `json:"whitelist"`
+	FallbackUri string   `json:"fallbackUri,omitempty"`
+	Auth        struct {
+		Enabled bool     `json:"enabled"`
+		Routes  []string `json:"routes"`
+	} `json:"auth,omitempty"`
 }
 
 type UpdateBody struct {
-	Name      string   `json:"name"`
-	Addr      string   `json:"addr"`
-	WhiteList []string `json:"whitelist"`
+	Name        string   `json:"name"`
+	Addr        string   `json:"addr"`
+	WhiteList   []string `json:"whitelist"`
+	FallbackUri string   `json:"fallbackUri,omitempty"`
+	Auth        struct {
+		Enabled bool     `json:"enabled"`
+		Routes  []string `json:"routes"`
+	} `json:"auth,omitempty"`
 }
 
 type RegisterResponse struct {
@@ -35,17 +45,28 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
-type ServiceAuth interface {
+type Authenticater interface {
 	Authenticate(string, *http.Request) AuthError
 	IsEnabled() bool
+}
+
+type CircuitExecuter interface {
+	Execute(string, func() ([]byte, error)) ([]byte, error)
+	IsOpen() bool
+}
+
+type IPAllower interface {
+	Allowed(string) bool
+	GetWhitelist() map[string]bool
+	UpdateWhitelist(map[string]bool)
 }
 
 type Service struct {
 	Addr           string          `json:"addr"`
 	FallbackUri    string          `json:"fallbackUri"`
-	IPWhiteList    *IPWhiteList    `json:"ipwhitelist"`
-	CircuitBreaker *CircuitBreaker `json:"circuitBreaker"`
-	Auth           ServiceAuth     `json:"auth"`
+	IPWhiteList    IPAllower       `json:"ipwhitelist"`
+	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
+	Auth           Authenticater   `json:"auth"`
 }
 
 func (s *Service) IsAuthEnabled() bool {
@@ -170,11 +191,17 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// TODO: do a schema validation before actually adding the service. duh ¯\_(ツ)_/¯
+
+	wl := NewIPWhiteList()
+	populateWhiteList(wl, rb.WhiteList)
 	sr.Register(rb.Name, &Service{
 		Addr:           rb.Address,
 		FallbackUri:    rb.FallbackUri,
-		IPWhiteList:    NewIPWhiteList(),
+		IPWhiteList:    wl,
 		CircuitBreaker: NewCircuitBreaker(DefaultSettings(rb.Name)),
+		Auth:           NewJwtAuth(rb.Auth.Enabled, rb.Auth.Routes),
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -199,6 +226,9 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// TODO: do a schema validation before actually changing something. duh ¯\_(ツ)_/¯
+
 	s := sr.GetService(ub.Name)
 	if s == nil {
 		slog.Error("Defined service doesn't exists")
@@ -208,9 +238,14 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 	// modify the address
 	s.Addr = ub.Addr
 	// add the new whitelisted ip
+	existingLists := s.IPWhiteList.GetWhitelist()
 	for _, v := range ub.WhiteList {
-		s.IPWhiteList.Whitelist[v] = true
+		existingLists[v] = true
 	}
+	s.IPWhiteList.UpdateWhitelist(existingLists)
+	s.FallbackUri = ub.FallbackUri
+	s.Auth = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Routes)
+
 	sr.Update(ub.Name, s)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

@@ -34,7 +34,7 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 	path := "/" + strings.Split(r.URL.Path, "/")[2]
 	slog.Info("Authenticating request", "service", name, "path", path)
 	exists := j.pathInRoutes(path)
-	if exists {
+	if exists && j.IsEnabled() {
 		if token == "" {
 			return ErrTokenMissing
 		}

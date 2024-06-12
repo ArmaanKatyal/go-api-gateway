@@ -31,3 +31,11 @@ func (w *IPWhiteList) Allowed(ip string) bool {
 	}
 	return true
 }
+
+func (w *IPWhiteList) GetWhitelist() map[string]bool {
+	return w.Whitelist
+}
+
+func (w* IPWhiteList) UpdateWhitelist(newlist map[string]bool) {
+	w.Whitelist = newlist
+}

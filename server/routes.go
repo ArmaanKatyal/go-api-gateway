@@ -133,7 +133,7 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
 		return
 	}
-	// TODO: Authenticate the request
+
 	if err := rh.ServiceRegistry.Authenticate(service_name, r); err != nil {
 		switch err {
 		case ErrTokenMissing:
@@ -219,7 +219,7 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 }
 
 // forward_request_cb forwards the request to the resolved service with circuit breaker
-func (rh *RequestHandler) forward_request_cb(w http.ResponseWriter, r *http.Request, forwardURI string, cb *CircuitBreaker, service string) error {
+func (rh *RequestHandler) forward_request_cb(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string) error {
 	// Define the request execution function
 	executeRequest := func() ([]byte, error) {
 		// Create a new request
