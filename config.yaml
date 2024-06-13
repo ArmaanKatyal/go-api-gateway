@@ -16,6 +16,9 @@ registry:
       whitelist:
         - "ALL"
       fallbackUri: "localhost:3001"
+      health:
+        enabled: true
+        uri: "/health"
       auth:
         enabled: true
         routes:

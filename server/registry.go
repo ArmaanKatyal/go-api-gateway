@@ -37,6 +37,10 @@ type RegisterResponse struct {
 	Message string `json:"message"`
 }
 
+type ResponseBody struct {
+	Message string `json:"message"`
+}
+
 type DeregisterBody struct {
 	Name string `json:"name"`
 }
@@ -61,9 +65,30 @@ type IPAllower interface {
 	UpdateWhitelist(map[string]bool)
 }
 
+type HealthCheck struct {
+	Enabled bool   `json:"enabled"`
+	Uri     string `json:"uri"`
+}
+
+func (h *HealthCheck) IsEnabled() bool {
+	return h.Enabled
+}
+
+func (h *HealthCheck) GetUri() string {
+	return h.Uri
+}
+
+func NewHealthCheck(enabled bool, uri string) *HealthCheck {
+	return &HealthCheck{
+		Enabled: enabled,
+		Uri:     uri,
+	}
+}
+
 type Service struct {
-	Addr           string          `json:"addr"`
-	FallbackUri    string          `json:"fallbackUri"`
+	Addr           string `json:"addr"`
+	FallbackUri    string `json:"fallbackUri"`
+	Health         *HealthCheck
 	IPWhiteList    IPAllower       `json:"ipwhitelist"`
 	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
 	Auth           Authenticater   `json:"auth"`
@@ -166,6 +191,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 		sr.Services[v.Name] = &Service{
 			Addr:           v.Addr,
 			FallbackUri:    v.FallbackUri,
+			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
 			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Routes),
@@ -247,9 +273,17 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 	s.Auth = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Routes)
 
 	sr.Update(ub.Name, s)
+
+	j, err := json.Marshal(ResponseBody{Message: "service " + ub.Name + " updated"})
+	if err != nil {
+		slog.Error("Error marshalling response", "error", err.Error(), "service", ub.Name)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("service updated successfully")); err != nil {
+	if _, err := w.Write(j); err != nil {
 		slog.Error("Error writing response", "error", err.Error())
 	}
 }
@@ -298,18 +332,18 @@ func (sr *ServiceRegistry) Heartbeat() {
 		time.Sleep(time.Duration(AppConfig.Registry.HeartbeatInterval) * time.Second)
 		sr.mu.RLock()
 		slog.Info("Heartbeating registered services")
-		for name, prop := range sr.Services {
-			// TODO: /health should be replaced with a configurable endpoint
-			// provided by the service in registration/config
-			resp, err := http.Get("http://" + prop.Addr + "/health")
-			if err != nil {
-				slog.Error("Service is down", "name", name, "address", prop.Addr)
-				continue
+		for name, v := range sr.Services {
+			if v.Health.IsEnabled() {
+				resp, err := http.Get("http://" + v.Addr + v.Health.GetUri())
+				if err != nil {
+					slog.Error("Service is down", "name", name, "address", v.Addr)
+					continue
+				}
+				if resp.StatusCode != http.StatusOK {
+					slog.Warn("Service is unhealthy", "name", name, "address", v.Addr)
+				}
+				resp.Body.Close()
 			}
-			if resp.StatusCode != http.StatusOK {
-				slog.Warn("Service is unhealthy", "name", name, "address", prop.Addr)
-			}
-			resp.Body.Close()
 		}
 		sr.mu.RUnlock()
 	}

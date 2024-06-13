@@ -6,7 +6,7 @@ Features:
 
 -   [x] URL Rewriting
 -   [x] Rate Limiting / Throttling / Quotas
--   [ ] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
+-   [x] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
 -   [ ] Caching
 -   [ ] SSL Termination
 -   [ ] Orchestration/Aggregation
