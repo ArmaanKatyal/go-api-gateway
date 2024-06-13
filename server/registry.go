@@ -16,19 +16,29 @@ type RegisterBody struct {
 	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
 	FallbackUri string   `json:"fallbackUri,omitempty"`
-	Auth        struct {
+	Health      struct {
+		Enabled bool   `json:"enabled"`
+		Uri     string `json:"uri"`
+	}
+	Auth *struct {
 		Enabled bool     `json:"enabled"`
+		Secret  string   `json:"secret"`
 		Routes  []string `json:"routes"`
 	} `json:"auth,omitempty"`
 }
 
 type UpdateBody struct {
 	Name        string   `json:"name"`
-	Addr        string   `json:"addr"`
+	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
 	FallbackUri string   `json:"fallbackUri,omitempty"`
-	Auth        struct {
+	Health      struct {
+		Enabled bool   `json:"enabled"`
+		Uri     string `json:"uri"`
+	}
+	Auth *struct {
 		Enabled bool     `json:"enabled"`
+		Secret  string   `json:"secret"`
 		Routes  []string `json:"routes"`
 	} `json:"auth,omitempty"`
 }
@@ -194,7 +204,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
-			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Routes),
+			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Routes, v.Auth.Secret),
 		}
 	}
 }
@@ -222,12 +232,20 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 
 	wl := NewIPWhiteList()
 	populateWhiteList(wl, rb.WhiteList)
+
+	var na *JwtAuth
+	if rb.Auth != nil {
+		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Routes, rb.Auth.Secret)
+	} else {
+		na = NewJwtAuth(false, []string{}, "")
+	}
+
 	sr.Register(rb.Name, &Service{
 		Addr:           rb.Address,
 		FallbackUri:    rb.FallbackUri,
 		IPWhiteList:    wl,
 		CircuitBreaker: NewCircuitBreaker(DefaultSettings(rb.Name)),
-		Auth:           NewJwtAuth(rb.Auth.Enabled, rb.Auth.Routes),
+		Auth:           na,
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -245,6 +263,7 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 // Update_service updates a existing service in the registry
 func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Updating service", "req", RequestToMap(r))
+	// TODO: only provide the fields that need to be updated, instead of the whole schema
 	var ub UpdateBody
 	err := json.NewDecoder(r.Body).Decode(&ub)
 	if err != nil {
@@ -262,7 +281,7 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// modify the address
-	s.Addr = ub.Addr
+	s.Addr = ub.Address
 	// add the new whitelisted ip
 	existingLists := s.IPWhiteList.GetWhitelist()
 	for _, v := range ub.WhiteList {
@@ -270,7 +289,14 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 	}
 	s.IPWhiteList.UpdateWhitelist(existingLists)
 	s.FallbackUri = ub.FallbackUri
-	s.Auth = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Routes)
+
+	var na *JwtAuth
+	if ub.Auth != nil {
+		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Routes, ub.Auth.Secret)
+	} else {
+		na = NewJwtAuth(false, []string{}, "")
+	}
+	s.Auth = na
 
 	sr.Update(ub.Name, s)
 

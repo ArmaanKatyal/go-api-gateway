@@ -21,6 +21,7 @@ registry:
         uri: "/health"
       auth:
         enabled: true
+        secret: "/secrets/backend.txt"
         routes:
           - "/private"
 ratelimiter:

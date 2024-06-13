@@ -26,16 +26,17 @@ type Conf struct {
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
 		Services          []struct {
-			Name           string   `yaml:"name"`
-			Addr           string   `yaml:"addr"`
-			WhiteList      []string `yaml:"whitelist"`
-			FallbackUri    string   `yaml:"fallbackUri"`
-			Health struct {
-				Enabled bool     `yaml:"enabled"`
-				Uri    string   `yaml:"uri"`
+			Name        string   `yaml:"name"`
+			Addr        string   `yaml:"addr"`
+			WhiteList   []string `yaml:"whitelist"`
+			FallbackUri string   `yaml:"fallbackUri"`
+			Health      struct {
+				Enabled bool   `yaml:"enabled"`
+				Uri     string `yaml:"uri"`
 			}
-			Auth           struct {
+			Auth struct {
 				Enabled bool     `yaml:"enabled"`
+				Secret  string   `yaml:"secret"`
 				Routes  []string `yaml:"routes"`
 			}
 		}

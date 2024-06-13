@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -18,6 +19,10 @@ type Claims struct {
 type ContextKey string
 type AuthError error
 
+const (
+	DEFAULT_SECRET = "test"
+)
+
 var (
 	ErrTokenMissing AuthError = errors.New("missing auth token")
 	ErrInvalidToken AuthError = errors.New("invalid auth token")
@@ -26,6 +31,11 @@ var (
 type JwtAuth struct {
 	Enabled bool     `json:"enabled"`
 	Routes  []string `json:"routes"`
+	secret  []byte
+}
+
+func (j *JwtAuth) getSecret() []byte {
+	return j.secret
 }
 
 // Authenticate checks if the request has a valid JWT token in the header
@@ -42,7 +52,7 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 		claims := &Claims{}
 		// TODO: fetch/use a custom secret for each service
 		parsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte("test"), nil
+			return j.getSecret(), nil
 		})
 		if err != nil {
 			slog.Error("Error parsing token", "error", err.Error(), "service", name, "path", path)
@@ -79,9 +89,15 @@ func (j *JwtAuth) IsEnabled() bool {
 	return j.Enabled
 }
 
-func NewJwtAuth(enabled bool, routes []string) *JwtAuth {
+func NewJwtAuth(enabled bool, routes []string, path string) *JwtAuth {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		slog.Error("Error reading secret file", "error", err.Error(), "path", path)
+		data = []byte(DEFAULT_SECRET)
+	}
 	return &JwtAuth{
 		Enabled: enabled,
 		Routes:  routes,
+		secret:  data,
 	}
 }
