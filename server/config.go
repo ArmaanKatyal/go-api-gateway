@@ -22,6 +22,10 @@ type Conf struct {
 			Timeout  int  `yaml:"timeout"`
 			Interval int  `yaml:"interval"`
 		}
+		Metrics struct {
+			Prefix  string    `yaml:"prefix"`
+			Buckets []float64 `yaml:"buckets"`
+		} `yaml:"metrics"`
 	}
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`

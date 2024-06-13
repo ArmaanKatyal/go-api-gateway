@@ -9,18 +9,21 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sony/gobreaker/v2"
 )
 
 type RequestHandler struct {
 	ServiceRegistry *ServiceRegistry
 	RateLimiter     *RateLimiter
+	Metrics         *PromMetrics
 }
 
 func NewRequestHandler() *RequestHandler {
 	return &RequestHandler{
 		ServiceRegistry: NewServiceRegistry(),
 		RateLimiter:     NewRateLimiter(),
+		Metrics:         NewPromMetrics(),
 	}
 }
 
@@ -87,6 +90,7 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	mux.HandleFunc("GET /health", health)
 	mux.HandleFunc("GET /config", config)
 	mux.HandleFunc("/", r.handle_request)
+	mux.Handle("GET /metrics", promhttp.Handler())
 	return mux
 }
 

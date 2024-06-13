@@ -9,7 +9,7 @@ Features:
 -   [x] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
 -   [ ] Caching
 -   [ ] SSL Termination
--   [ ] Orchestration/Aggregation
+-   [ ] Orchestration/Aggregation (Ambitious feature) (really cool tho)
 -   [ ] Protocol Translation
 -   [x] IP Whitelisting
 -   [x] Circuit Breaker
