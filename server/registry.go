@@ -217,8 +217,8 @@ func NewServiceRegistry() *ServiceRegistry {
 	return &r
 }
 
-// Register_service registers a service with the registry
-func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Request) {
+// RegisterService registers a service with the registry
+func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Registering service", "req", RequestToMap(r))
 	var rb RegisterBody
 	err := json.NewDecoder(r.Body).Decode(&rb)
@@ -260,8 +260,8 @@ func (sr *ServiceRegistry) Register_service(w http.ResponseWriter, r *http.Reque
 	}
 }
 
-// Update_service updates a existing service in the registry
-func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request) {
+// UpdateService updates a existing service in the registry
+func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Updating service", "req", RequestToMap(r))
 	// TODO: only provide the fields that need to be updated, instead of the whole schema
 	var ub UpdateBody
@@ -314,8 +314,8 @@ func (sr *ServiceRegistry) Update_service(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// Deregister_service deregisters a service from the registry
-func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Request) {
+// DeregisterService deregisters a service from the registry
+func (sr *ServiceRegistry) DeregisterService(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Deregistering service", "req", RequestToMap(r))
 	var db DeregisterBody
 	err := json.NewDecoder(r.Body).Decode(&db)
@@ -338,8 +338,8 @@ func (sr *ServiceRegistry) Deregister_service(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// Get_services returns the registered services
-func (sr *ServiceRegistry) Get_services(w http.ResponseWriter, r *http.Request) {
+// GetServices returns the registered services
+func (sr *ServiceRegistry) GetServices(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Retrieved registered services", "req", RequestToMap(r))
 	j, err := json.Marshal(sr.Services)
 	if err != nil {

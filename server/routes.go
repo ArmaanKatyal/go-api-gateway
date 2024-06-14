@@ -59,7 +59,7 @@ func RequestToMap(r *http.Request) map[string]interface{} {
 }
 
 // health is a simple health check endpoint
-func health(w http.ResponseWriter, r *http.Request) {
+func Health(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Health check", "req", RequestToMap(r))
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("OK")); err != nil {
@@ -68,7 +68,7 @@ func health(w http.ResponseWriter, r *http.Request) {
 }
 
 // config returns the application configuration
-func config(w http.ResponseWriter, r *http.Request) {
+func Config(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Get config", "req", RequestToMap(r))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -83,13 +83,13 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.RateLimiter.cleanupVisitors()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /services/register", r.ServiceRegistry.Register_service)
-	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.Deregister_service)
-	mux.HandleFunc("GET /services", r.ServiceRegistry.Get_services)
-	mux.HandleFunc("POST /services/update", r.ServiceRegistry.Update_service)
-	mux.HandleFunc("GET /health", health)
-	mux.HandleFunc("GET /config", config)
-	mux.HandleFunc("/", r.handle_request)
+	mux.HandleFunc("POST /services/register", r.ServiceRegistry.RegisterService)
+	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.DeregisterService)
+	mux.HandleFunc("GET /services", r.ServiceRegistry.GetServices)
+	mux.HandleFunc("POST /services/update", r.ServiceRegistry.UpdateService)
+	mux.HandleFunc("GET /health", Health)
+	mux.HandleFunc("GET /config", Config)
+	mux.HandleFunc("/", r.HandleRequest)
 	mux.Handle("GET /metrics", promhttp.Handler())
 	return mux
 }
@@ -102,8 +102,8 @@ func (rh *RequestHandler) rateLimiterEnabled() bool {
 	return AppConfig.RateLimiter.Enabled
 }
 
-// resolve_path splits the path into service name and route path
-func (rh *RequestHandler) resolve_path(path string) (string, []string) {
+// resolvePath splits the path into service name and route path
+func (rh *RequestHandler) resolvePath(path string) (string, []string) {
 	parts := strings.Split(path, "/")
 	if len(parts) < 2 {
 		return path, nil
@@ -111,8 +111,8 @@ func (rh *RequestHandler) resolve_path(path string) (string, []string) {
 	return parts[1], parts[2:]
 }
 
-// create_forward_uri creates a new uri based on the resolved request
-func (rh *RequestHandler) create_forward_uri(address string, route []string, query string) string {
+// createForwardURI creates a new uri based on the resolved request
+func (rh *RequestHandler) createForwardURI(address string, route []string, query string) string {
 	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
 		address = "http://" + address
 	}
@@ -123,10 +123,10 @@ func (rh *RequestHandler) create_forward_uri(address string, route []string, que
 	return forward_uri
 }
 
-// handle_request handles the incoming request and forwards it to the resolved service
-func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request) {
+// HandleRequest handles the incoming request and forwards it to the resolved service
+func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Received request", "req", RequestToMap(r))
-	service_name, route := rh.resolve_path(r.URL.Path)
+	service_name, route := rh.resolvePath(r.URL.Path)
 	if ok, err := rh.ServiceRegistry.IsWhitelisted(service_name, r.RemoteAddr); !ok || err != nil {
 		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -160,7 +160,7 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	// Create a new uri based on the resolved request
-	forward_uri := rh.create_forward_uri(address, route, r.URL.RawQuery)
+	forward_uri := rh.createForwardURI(address, route, r.URL.RawQuery)
 
 	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", service_name)
 	service := rh.ServiceRegistry.GetService(service_name)
@@ -168,9 +168,9 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 	var err error
 	// Forward the request with or without circuit breaker
 	if rh.circuitBreakerEnabled() {
-		err = rh.forward_request_cb(w, r, forward_uri, service.CircuitBreaker, service_name)
+		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name)
 	} else {
-		err = rh.forward_request(w, r, forward_uri)
+		err = rh.forwardRequest(w, r, forward_uri)
 	}
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
@@ -178,8 +178,8 @@ func (rh *RequestHandler) handle_request(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// forward_request forwards the request to the resolved service
-func (rh *RequestHandler) forward_request(w http.ResponseWriter, r *http.Request, forward_uri string) error {
+// forwardRequest forwards the request to the resolved service
+func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string) error {
 	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
 	if err != nil {
 		return err
@@ -222,8 +222,8 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 	}
 }
 
-// forward_request_cb forwards the request to the resolved service with circuit breaker
-func (rh *RequestHandler) forward_request_cb(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string) error {
+// forwardRequestCB forwards the request to the resolved service with circuit breaker
+func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string) error {
 	// Define the request execution function
 	executeRequest := func() ([]byte, error) {
 		// Create a new request
@@ -282,7 +282,7 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 		return nil
 	}
 
-	_, route := rh.resolve_path(r.URL.Path)
-	forwardURI := rh.create_forward_uri(fallbackURI, route, r.URL.RawQuery)
-	return rh.forward_request(w, r, forwardURI)
+	_, route := rh.resolvePath(r.URL.Path)
+	forwardURI := rh.createForwardURI(fallbackURI, route, r.URL.RawQuery)
+	return rh.forwardRequest(w, r, forwardURI)
 }
