@@ -20,10 +20,11 @@ type RequestHandler struct {
 }
 
 func NewRequestHandler() *RequestHandler {
+	m := NewPromMetrics()
 	return &RequestHandler{
-		ServiceRegistry: NewServiceRegistry(),
-		RateLimiter:     NewRateLimiter(),
-		Metrics:         NewPromMetrics(),
+		ServiceRegistry: NewServiceRegistry(m),
+		RateLimiter:     NewRateLimiter(m),
+		Metrics:         m,
 	}
 }
 

@@ -16,6 +16,7 @@ type client struct {
 
 type RateLimiter struct {
 	mu       sync.RWMutex
+	Metrics  *PromMetrics
 	visitors map[string]*client
 }
 
@@ -58,8 +59,9 @@ func (rl *RateLimiter) Allow(address string) bool {
 	return true
 }
 
-func NewRateLimiter() *RateLimiter {
+func NewRateLimiter(metrics *PromMetrics) *RateLimiter {
 	return &RateLimiter{
 		visitors: make(map[string]*client),
+		Metrics:  metrics,
 	}
 }

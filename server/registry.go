@@ -110,6 +110,7 @@ func (s *Service) IsAuthEnabled() bool {
 
 type ServiceRegistry struct {
 	mu       sync.RWMutex
+	Metrics  *PromMetrics
 	Services map[string]*Service `json:"services"`
 }
 
@@ -209,9 +210,10 @@ func populateRegistryServices(sr *ServiceRegistry) {
 	}
 }
 
-func NewServiceRegistry() *ServiceRegistry {
+func NewServiceRegistry(metrics *PromMetrics) *ServiceRegistry {
 	r := ServiceRegistry{
 		Services: make(map[string]*Service),
+		Metrics:  metrics,
 	}
 	populateRegistryServices(&r)
 	return &r
