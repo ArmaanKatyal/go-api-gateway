@@ -8,15 +8,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// AppConfig is the global configuration object
 var AppConfig Conf
 
 type Conf struct {
 	Server struct {
-		Host            string `yaml:"host"`
-		Port            string `yaml:"port"`
-		ReadTimeout     int    `yaml:"readTimeout"`
-		WriteTimeout    int    `yaml:"writeTimeout"`
-		GracefulTimeout int    `yaml:"gracefulTimeout"`
+		Host string `yaml:"host"`
+		Port string `yaml:"port"`
+		// the maximum duration for reading the entire request, including the body
+		ReadTimeout int `yaml:"readTimeout"`
+		// the maximum duration before timing out writes of the response
+		WriteTimeout int `yaml:"writeTimeout"`
+		// the maximum duration before timing out the graceful shutdown
+		GracefulTimeout int `yaml:"gracefulTimeout"`
 		CircuitBreaker  struct {
 			Enabled  bool `yaml:"enabled"`
 			Timeout  int  `yaml:"timeout"`
@@ -28,6 +32,7 @@ type Conf struct {
 		} `yaml:"metrics"`
 	}
 	Registry struct {
+		// Interval (secs) at which the service will send a heartbeat to all registered services
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
 		Services          []struct {
 			Name      string   `yaml:"name"`
@@ -52,8 +57,11 @@ type Conf struct {
 		}
 	}
 	RateLimiter struct {
-		Enabled              bool `yaml:"enabled"`
-		MaxRequestsPerMinute int  `yaml:"maxRequestsPerMinute"`
+		Enabled bool `yaml:"enabled"`
+		// Maximum number of requests per minute
+		MaxRequestsPerMinute int `yaml:"maxRequestsPerMinute"`
+		// Interval (mins) at which the rate limiter will clean up old visitors
+		CleanupInterval int `yaml:"cleanupInterval"`
 	}
 }
 
@@ -88,6 +96,9 @@ func (c *Conf) Verify() bool {
 	}
 	if c.Server.CircuitBreaker.Interval == 0 {
 		c.Server.CircuitBreaker.Interval = 10
+	}
+	if c.RateLimiter.CleanupInterval == 0 {
+		c.RateLimiter.CleanupInterval = 2
 	}
 	return true
 }

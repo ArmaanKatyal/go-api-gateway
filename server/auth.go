@@ -55,7 +55,6 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 		}
 		// parse token
 		claims := &Claims{}
-		// TODO: fetch/use a custom secret for each service
 		parsed, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
 			return j.getSecret(), nil
 		})

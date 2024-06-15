@@ -70,6 +70,7 @@ func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput, time float64) {
 	pm.httpTransactionTotal.WithLabelValues(input.ToList()...).Inc()
 }
 
+// Collect collects the ResponseTime and HttpTransaction metrics
 func (pm *PromMetrics) Collect(input *MetricsInput, t time.Time) {
 	elapsed := time.Since(t).Seconds()
 	pm.ObserveResponseTime(input, elapsed)

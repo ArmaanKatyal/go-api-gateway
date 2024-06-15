@@ -28,6 +28,7 @@ type RegisterBody struct {
 	} `json:"auth,omitempty"`
 }
 
+// Note: try to keep it consistent with RegisterBody
 type UpdateBody struct {
 	Name        string   `json:"name"`
 	Address     string   `json:"addr"`
@@ -61,16 +62,19 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
+// Interface for authenticating requests
 type Authenticater interface {
 	Authenticate(string, *http.Request) AuthError
 	IsEnabled() bool
 }
 
+// Interface for executing circuit breaker
 type CircuitExecuter interface {
 	Execute(string, func() ([]byte, error)) ([]byte, error)
 	IsOpen() bool
 }
 
+// Interface for handling IP whitelist
 type IPAllower interface {
 	Allowed(string) bool
 	GetWhitelist() map[string]bool
@@ -116,6 +120,7 @@ type ServiceRegistry struct {
 	Services map[string]*Service `json:"services"`
 }
 
+// Register registers a service with the registry
 func (sr *ServiceRegistry) Register(name string, s *Service) {
 	slog.Info("Registering service", "name", name, "address", s.Addr)
 	sr.mu.Lock()
@@ -126,6 +131,7 @@ func (sr *ServiceRegistry) Register(name string, s *Service) {
 	sr.Services[name] = s
 }
 
+// Update updates a service in the registry
 func (sr *ServiceRegistry) Update(name string, updated *Service) {
 	slog.Info("Updating registered service", "name", name)
 	sr.mu.Lock()
@@ -135,6 +141,7 @@ func (sr *ServiceRegistry) Update(name string, updated *Service) {
 	}
 }
 
+// Deregister removes a service from the registry
 func (sr *ServiceRegistry) Deregister(name string) {
 	slog.Info("Deregistering service", "name", name)
 	sr.mu.Lock()
@@ -142,6 +149,7 @@ func (sr *ServiceRegistry) Deregister(name string) {
 	delete(sr.Services, name)
 }
 
+// GetAddress returns the address of the service with the given name
 func (sr *ServiceRegistry) GetAddress(name string) string {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
@@ -152,13 +160,17 @@ func (sr *ServiceRegistry) GetAddress(name string) string {
 	return val.Addr
 }
 
+// GetService returns the service with the given name
 func (sr *ServiceRegistry) GetService(name string) *Service {
+	sr.mu.RLock()
+	defer sr.mu.RUnlock()
 	if v, ok := sr.Services[name]; ok {
 		return v
 	}
 	return nil
 }
 
+// GetFallbackUri returns the fallback uri of the service with the given name
 func (sr *ServiceRegistry) GetFallbackUri(name string) string {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()

@@ -10,6 +10,7 @@ import (
 )
 
 func main() {
+	// Initialize logger
 	opts := PrettyHandlerOptions{
 		SlogOpts: slog.HandlerOptions{
 			Level: slog.LevelDebug,
@@ -19,7 +20,9 @@ func main() {
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
 
+	// Load configuration
 	LoadConf()
+	// Initialize registry
 	rh := NewRequestHandler()
 	router := InitializeRoutes(rh)
 	server := &http.Server{
@@ -30,11 +33,14 @@ func main() {
 	}
 	slog.Info("API Gateway started", "port", AppConfig.Server.Port)
 	go func() {
+		// Start server
 		if err := server.ListenAndServe(); err != nil {
 			slog.Error("Error starting server", "error", err.Error())
 			os.Exit(1)
 		}
 	}()
+
+	// Graceful shutdown
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 

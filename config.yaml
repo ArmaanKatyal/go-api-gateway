@@ -31,3 +31,4 @@ registry:
 ratelimiter:
   enabled: true
   maxRequestsPerMinute: 500
+  cleanupInterval: 1

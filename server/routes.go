@@ -37,22 +37,23 @@ func RequestToMap(r *http.Request) map[string]interface{} {
 
 	result["url"] = r.URL.String()
 
+	// Use the first value for each header, query parameter, and form field
 	headers := make(map[string]string)
 	for name, values := range r.Header {
-		headers[name] = values[0] // Use the first value for each header
+		headers[name] = values[0]
 	}
 	result["headers"] = headers
 
 	queryParams := make(map[string]string)
 	for name, values := range r.URL.Query() {
-		queryParams[name] = values[0] // Use the first value for each query parameter
+		queryParams[name] = values[0]
 	}
 	result["query_params"] = queryParams
 
 	if err := r.ParseForm(); err == nil {
 		formValues := make(map[string]string)
 		for name, values := range r.Form {
-			formValues[name] = values[0] // Use the first value for each form field
+			formValues[name] = values[0]
 		}
 		result["form_values"] = formValues
 	}
@@ -152,6 +153,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := rh.ServiceRegistry.Authenticate(service_name, r); err != nil {
+		// If Auth fails reject the request with an appropriate message and status code
 		switch err {
 		case ErrTokenMissing:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
@@ -301,6 +303,7 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 	return nil
 }
 
+// handleFallbackRequest handles the case where the circuit breaker is open and a fallback request is needed
 func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.Request, service string, t time.Time) error {
 	slog.Error("Circuit breaker is open, making a fallback request", "service", service)
 	fallbackURI := rh.ServiceRegistry.GetFallbackUri(service)
@@ -311,7 +314,9 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 		return nil
 	}
 
+	// Resolve the path and create a new URI
 	_, route := rh.resolvePath(r.URL.Path)
 	forwardURI := rh.createForwardURI(fallbackURI, route, r.URL.RawQuery)
+	// Forward the request
 	return rh.forwardRequest(w, r, forwardURI, t)
 }

@@ -15,7 +15,8 @@ type client struct {
 }
 
 type RateLimiter struct {
-	mu       sync.RWMutex
+	mu sync.RWMutex
+	// just here if needed to record any metrics from the rate limiter
 	Metrics  *PromMetrics
 	visitors map[string]*client
 }
@@ -27,7 +28,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 		rl.mu.Lock()
 		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > 2*time.Minute {
+			if time.Since(v.lastSeen) > time.Duration(AppConfig.RateLimiter.CleanupInterval)*time.Minute {
 				delete(rl.visitors, ip)
 			}
 		}
