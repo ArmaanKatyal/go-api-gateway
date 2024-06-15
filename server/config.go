@@ -30,18 +30,24 @@ type Conf struct {
 	Registry struct {
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
 		Services          []struct {
-			Name        string   `yaml:"name"`
-			Addr        string   `yaml:"addr"`
-			WhiteList   []string `yaml:"whitelist"`
-			FallbackUri string   `yaml:"fallbackUri"`
+			Name      string   `yaml:"name"`
+			Addr      string   `yaml:"addr"`
+			WhiteList []string `yaml:"whitelist"`
+			// uri to redirect to if the service is down
+			FallbackUri string `yaml:"fallbackUri"`
 			Health      struct {
-				Enabled bool   `yaml:"enabled"`
-				Uri     string `yaml:"uri"`
+				Enabled bool `yaml:"enabled"`
+				// path to the health check endpoint
+				Uri string `yaml:"uri"`
 			}
 			Auth struct {
-				Enabled bool     `yaml:"enabled"`
-				Secret  string   `yaml:"secret"`
-				Routes  []string `yaml:"routes"`
+				Enabled bool `yaml:"enabled"`
+				// Give the option to make requets with no/expired token to pas through
+				Anonymous bool `yaml:"anonymous"`
+				// path to the secret file
+				Secret string `yaml:"secret"`
+				// list of routes that require authentication
+				Routes []string `yaml:"routes"`
 			}
 		}
 	}

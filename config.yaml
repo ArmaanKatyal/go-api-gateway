@@ -9,7 +9,7 @@ server:
     timeout: 5
     interval: 0
   metrics:
-    prefix: "go-api-gateway"
+    prefix: "gateway"
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1]
 registry:
   heartbeatInterval: 15
@@ -24,6 +24,7 @@ registry:
         uri: "/health"
       auth:
         enabled: true
+        anonymous: false
         secret: "/secrets/backend.txt"
         routes:
           - "/private"

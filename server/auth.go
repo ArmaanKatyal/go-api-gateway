@@ -29,9 +29,10 @@ var (
 )
 
 type JwtAuth struct {
-	Enabled bool     `json:"enabled"`
-	Routes  []string `json:"routes"`
-	secret  []byte
+	Enabled   bool     `json:"enabled"`
+	Anonymous bool     `json:"anonymous"`
+	Routes    []string `json:"routes"`
+	secret    []byte
 }
 
 func (j *JwtAuth) getSecret() []byte {
@@ -46,6 +47,10 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 	exists := j.pathInRoutes(path)
 	if exists && j.IsEnabled() {
 		if token == "" {
+			if j.Anonymous {
+				slog.Warn("Anonymous request", "service", name, "path", path)
+				return nil
+			}
 			return ErrTokenMissing
 		}
 		// parse token
@@ -55,6 +60,10 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 			return j.getSecret(), nil
 		})
 		if err != nil {
+			if j.Anonymous {
+				slog.Warn("Anonymous request", "service", name, "path", path)
+				return nil
+			}
 			slog.Error("Error parsing token", "error", err.Error(), "service", name, "path", path)
 			return err
 		}
@@ -66,6 +75,10 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 		// Check expiration
 		if claims.ExpiresAt.Unix() < time.Now().Unix() {
 			slog.Error("Token expired", "service", name, "path", path)
+			if j.Anonymous {
+				slog.Warn("Anonymous request", "service", name, "path", path)
+				return nil
+			}
 			return ErrInvalidToken
 		}
 
@@ -89,15 +102,16 @@ func (j *JwtAuth) IsEnabled() bool {
 	return j.Enabled
 }
 
-func NewJwtAuth(enabled bool, routes []string, path string) *JwtAuth {
+func NewJwtAuth(enabled bool, anonymous bool, routes []string, path string) *JwtAuth {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		slog.Error("Error reading secret file", "error", err.Error(), "path", path)
 		data = []byte(DEFAULT_SECRET)
 	}
 	return &JwtAuth{
-		Enabled: enabled,
-		Routes:  routes,
-		secret:  data,
+		Enabled:   enabled,
+		Anonymous: anonymous,
+		Routes:    routes,
+		secret:    data,
 	}
 }

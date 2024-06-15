@@ -14,4 +14,4 @@ Features:
 -   [x] IP Whitelisting
 -   [x] Circuit Breaker
 -   [x] Logging
--   [ ] Tracing
+-   [x] Tracing

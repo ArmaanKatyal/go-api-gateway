@@ -3,11 +3,13 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
+// Note: just collecting basic metrics anything more complex not needed for this project
 type PromMetrics struct {
 	prefix                    string
 	httpTransactionTotal      *prometheus.CounterVec
@@ -21,6 +23,7 @@ type MetricsInput struct {
 	Route  string
 }
 
+// ToList converts the MetricsInput struct to a list of strings
 func (m *MetricsInput) ToList() []string {
 	var values []string
 	inputValue := reflect.ValueOf(*m)
@@ -33,6 +36,7 @@ func (m *MetricsInput) ToList() []string {
 	return values
 }
 
+// getLabels returns a list of labels for the Prometheus metrics
 func getLabels() []string {
 	var labels []string
 	metricsInputType := reflect.TypeOf(MetricsInput{})
@@ -58,10 +62,16 @@ func NewPromMetrics() *PromMetrics {
 	}
 }
 
-func (pm *PromMetrics) ObserveResponseTime(input MetricsInput, time float64) {
+func (pm *PromMetrics) ObserveResponseTime(input *MetricsInput, time float64) {
 	pm.httpResponseTimeHistogram.WithLabelValues(input.ToList()...).Observe(time)
 }
 
-func (pm *PromMetrics) IncHttpTransaction(input MetricsInput, time float64) {
+func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput, time float64) {
 	pm.httpTransactionTotal.WithLabelValues(input.ToList()...).Inc()
+}
+
+func (pm *PromMetrics) Collect(input *MetricsInput, t time.Time) {
+	elapsed := time.Since(t).Seconds()
+	pm.ObserveResponseTime(input, elapsed)
+	pm.IncHttpTransaction(input, elapsed)
 }

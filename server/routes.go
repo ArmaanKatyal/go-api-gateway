@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -59,6 +60,10 @@ func RequestToMap(r *http.Request) map[string]interface{} {
 	return result
 }
 
+func GetStatusCode(statusCode int) string {
+	return http.StatusText(statusCode)
+}
+
 // health is a simple health check endpoint
 func Health(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Health check", "req", RequestToMap(r))
@@ -103,6 +108,10 @@ func (rh *RequestHandler) rateLimiterEnabled() bool {
 	return AppConfig.RateLimiter.Enabled
 }
 
+func (rh *RequestHandler) CollectMetrics(input *MetricsInput, t time.Time) {
+	rh.Metrics.Collect(input, t)
+}
+
 // resolvePath splits the path into service name and route path
 func (rh *RequestHandler) resolvePath(path string) (string, []string) {
 	parts := strings.Split(path, "/")
@@ -126,16 +135,19 @@ func (rh *RequestHandler) createForwardURI(address string, route []string, query
 
 // HandleRequest handles the incoming request and forwards it to the resolved service
 func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
 	slog.Info("Received request", "req", RequestToMap(r))
 	service_name, route := rh.resolvePath(r.URL.Path)
 	if ok, err := rh.ServiceRegistry.IsWhitelisted(service_name, r.RemoteAddr); !ok || err != nil {
 		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 	if rh.rateLimiterEnabled() && !rh.RateLimiter.Allow(r.RemoteAddr) {
 		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 
@@ -144,10 +156,17 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 		case ErrTokenMissing:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
 			http.Error(w, "token missing", http.StatusUnauthorized)
+			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		case ErrInvalidToken:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
 			http.Error(w, "invalid token", http.StatusUnauthorized)
+			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
+			return
+		default:
+			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			http.Error(w, "auth failed", http.StatusUnauthorized)
+			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		}
 	}
@@ -158,6 +177,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	if address == "" {
 		slog.Error("Service not found", "service_name", service_name)
 		http.Error(w, "service not found", http.StatusNotFound)
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 	// Create a new uri based on the resolved request
@@ -169,20 +189,22 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	var err error
 	// Forward the request with or without circuit breaker
 	if rh.circuitBreakerEnabled() {
-		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name)
+		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name, start)
 	} else {
-		err = rh.forwardRequest(w, r, forward_uri)
+		err = rh.forwardRequest(w, r, forward_uri, start)
 	}
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 	}
 }
 
 // forwardRequest forwards the request to the resolved service
-func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string) error {
+func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string, t time.Time) error {
 	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
 	if err != nil {
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
 	req.Header = cloneHeader(r.Header)
@@ -194,6 +216,7 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
 	defer resp.Body.Close()
@@ -202,8 +225,10 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
+	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(resp.StatusCode), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
 
@@ -224,7 +249,7 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 }
 
 // forwardRequestCB forwards the request to the resolved service with circuit breaker
-func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string) error {
+func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string, t time.Time) error {
 	// Define the request execution function
 	executeRequest := func() ([]byte, error) {
 		// Create a new request
@@ -262,7 +287,7 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// Handle the case where the circuit is open and fallback is needed
 		if cb.IsOpen() || errors.Is(err, gobreaker.ErrOpenState) {
-			return rh.handleFallbackRequest(w, r, service)
+			return rh.handleFallbackRequest(w, r, service, t)
 		}
 		return err
 	}
@@ -272,18 +297,21 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		return fmt.Errorf("failed to write response body: %w", err)
 	}
+	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
 
-func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.Request, service string) error {
+func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.Request, service string, t time.Time) error {
 	slog.Error("Circuit breaker is open, making a fallback request", "service", service)
 	fallbackURI := rh.ServiceRegistry.GetFallbackUri(service)
 	if fallbackURI == "" {
 		slog.Error("Fallback URI not found", "service_name", service)
+		http.Error(w, "fallback uri not found", http.StatusNotFound)
+		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, t)
 		return nil
 	}
 
 	_, route := rh.resolvePath(r.URL.Path)
 	forwardURI := rh.createForwardURI(fallbackURI, route, r.URL.RawQuery)
-	return rh.forwardRequest(w, r, forwardURI)
+	return rh.forwardRequest(w, r, forwardURI, t)
 }

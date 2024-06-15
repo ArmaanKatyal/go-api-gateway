@@ -21,9 +21,10 @@ type RegisterBody struct {
 		Uri     string `json:"uri"`
 	}
 	Auth *struct {
-		Enabled bool     `json:"enabled"`
-		Secret  string   `json:"secret"`
-		Routes  []string `json:"routes"`
+		Enabled   bool     `json:"enabled"`
+		Anonymous bool     `json:"anonymous"`
+		Secret    string   `json:"secret"`
+		Routes    []string `json:"routes"`
 	} `json:"auth,omitempty"`
 }
 
@@ -37,9 +38,10 @@ type UpdateBody struct {
 		Uri     string `json:"uri"`
 	}
 	Auth *struct {
-		Enabled bool     `json:"enabled"`
-		Secret  string   `json:"secret"`
-		Routes  []string `json:"routes"`
+		Enabled   bool     `json:"enabled"`
+		Anonymous bool     `json:"anonymous"`
+		Secret    string   `json:"secret"`
+		Routes    []string `json:"routes"`
 	} `json:"auth,omitempty"`
 }
 
@@ -205,7 +207,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
-			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Routes, v.Auth.Secret),
+			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, v.Auth.Secret),
 		}
 	}
 }
@@ -237,9 +239,9 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 
 	var na *JwtAuth
 	if rb.Auth != nil {
-		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Routes, rb.Auth.Secret)
+		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, rb.Auth.Secret)
 	} else {
-		na = NewJwtAuth(false, []string{}, "")
+		na = NewJwtAuth(false, false, []string{}, "")
 	}
 
 	sr.Register(rb.Name, &Service{
@@ -294,9 +296,9 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 
 	var na *JwtAuth
 	if ub.Auth != nil {
-		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Routes, ub.Auth.Secret)
+		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, ub.Auth.Secret)
 	} else {
-		na = NewJwtAuth(false, []string{}, "")
+		na = NewJwtAuth(false, false, []string{}, "")
 	}
 	s.Auth = na
 
