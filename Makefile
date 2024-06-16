@@ -20,3 +20,14 @@ client2:
 
 build_client:
 	go build -o bin/client ./client
+
+image:
+	docker build -t go-api-gateway .
+
+run_image:
+	docker run --env=GOPATH=/go --network=bridge --workdir=/app -p 8080:8080 --restart=no --runtime=runc --name gateway -d go-api-gateway:latest
+
+dclean:
+	docker stop gateway
+	docker rm -f gateway
+	docker rmi go-api-gateway:latest

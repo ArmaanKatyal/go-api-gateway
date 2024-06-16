@@ -23,15 +23,15 @@ To get started with go-api-gateway, clone the repository and follow the setup in
 
 ### Prerequisites
 
-- Go (version 1.22 or later)
-- Docker (for containerization and deployment)
+-   Go (version 1.22 or later)
+-   Docker (for containerization and deployment)
 
 ### Installation
 
 1. Install dependencies
 
 ```sh
-go mod tidy
+go mod download
 ```
 
 2. Build and run the gateway
@@ -39,6 +39,17 @@ go mod tidy
 ```sh
 make run
 ```
+
+This will start the gateway(locally) on port 8080.
+
+OR
+
+```sh
+make image
+make run_image
+```
+
+This will build the docker image and run the gateway in a container.
 
 ### Configuration
 
