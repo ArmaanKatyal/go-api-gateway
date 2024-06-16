@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -21,16 +22,26 @@ type Conf struct {
 		WriteTimeout int `yaml:"writeTimeout"`
 		// the maximum duration before timing out the graceful shutdown
 		GracefulTimeout int `yaml:"gracefulTimeout"`
-		CircuitBreaker  struct {
+
+		TLSConfig struct {
+			Enabled bool `yaml:"enabled"`
+			// path to the certificate and key files
+			CertFile string `yaml:"certFile"`
+			KeyFile  string `yaml:"keyFile"`
+		}
+
+		CircuitBreaker struct {
 			Enabled  bool `yaml:"enabled"`
 			Timeout  int  `yaml:"timeout"`
 			Interval int  `yaml:"interval"`
 		}
+
 		Metrics struct {
 			Prefix  string    `yaml:"prefix"`
 			Buckets []float64 `yaml:"buckets"`
 		} `yaml:"metrics"`
 	}
+
 	Registry struct {
 		// Interval (secs) at which the service will send a heartbeat to all registered services
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
@@ -56,6 +67,7 @@ type Conf struct {
 			}
 		}
 	}
+
 	RateLimiter struct {
 		Enabled bool `yaml:"enabled"`
 		// Maximum number of requests per minute
@@ -121,4 +133,36 @@ func LoadConf() {
 	}
 	AppConfig = c
 	slog.Info("Config loaded successfully")
+}
+
+func GetCertFile() string {
+	// Append path to root folder
+	certPath := filepath.Join(GetWd(), AppConfig.Server.TLSConfig.CertFile)
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		slog.Error("Certificate file not found", "path", certPath)
+		os.Exit(1)
+	}
+	return certPath
+}
+
+func GetKeyFile() string {
+	certPath := filepath.Join(GetWd(), AppConfig.Server.TLSConfig.KeyFile)
+	if _, err := os.Stat(certPath); os.IsNotExist(err) {
+		slog.Error("Key file not found", "path", certPath)
+		os.Exit(1)
+	}
+	return certPath
+}
+
+func TLSEnabled() bool {
+	return AppConfig.Server.TLSConfig.Enabled
+}
+
+func GetWd() string {
+	wd, err := os.Getwd()
+	if err != nil {
+		slog.Error("Unable to get current working directory", "error", err.Error())
+		os.Exit(1)
+	}
+	return wd
 }

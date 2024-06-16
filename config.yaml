@@ -4,6 +4,10 @@ server:
   readTimeout: 5
   writeTimeout: 10
   gracefulTimeout: 5
+  tlsconfig:
+    enabled: true
+    certFile: "/certs/cert.pem"
+    keyFile: "/certs/key.pem"
   circuitbreaker:
     enabled: true
     timeout: 5
@@ -25,7 +29,7 @@ registry:
       auth:
         enabled: true
         anonymous: false
-        secret: "/secrets/backend.txt"
+        secret: "./secrets/backend.txt"
         routes:
           - "/private"
 ratelimiter:

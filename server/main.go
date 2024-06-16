@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"log/slog"
 	"net/http"
 	"os"
@@ -25,18 +26,31 @@ func main() {
 	// Initialize registry
 	rh := NewRequestHandler()
 	router := InitializeRoutes(rh)
+
+	tlsConfig := &tls.Config{
+		MinVersion: tls.VersionTLS12,
+	}
 	server := &http.Server{
 		Addr:         ":" + AppConfig.Server.Port,
 		Handler:      router,
 		ReadTimeout:  time.Duration(AppConfig.Server.ReadTimeout) * time.Second,
 		WriteTimeout: time.Duration(AppConfig.Server.WriteTimeout) * time.Second,
+		TLSConfig:    tlsConfig,
 	}
+
 	slog.Info("API Gateway started", "port", AppConfig.Server.Port)
 	go func() {
 		// Start server
-		if err := server.ListenAndServe(); err != nil {
-			slog.Error("Error starting server", "error", err.Error())
-			os.Exit(1)
+		if TLSEnabled() {
+			if err := server.ListenAndServeTLS(GetCertFile(), GetKeyFile()); err != nil {
+				slog.Error("Error starting server", "error", err.Error())
+				os.Exit(1)
+			}
+		} else {
+			if err := server.ListenAndServe(); err != nil {
+				slog.Error("Error starting server", "error", err.Error())
+				os.Exit(1)
+			}
 		}
 	}()
 

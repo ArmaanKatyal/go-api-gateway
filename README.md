@@ -8,7 +8,7 @@ Features:
 -   [x] Rate Limiting / Throttling / Quotas
 -   [x] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
 -   [ ] Caching
--   [ ] SSL Termination
+-   [x] TLS Termination
 -   [ ] Orchestration/Aggregation (Ambitious feature) (really cool tho)
 -   [ ] Protocol Translation
 -   [x] IP Whitelisting
