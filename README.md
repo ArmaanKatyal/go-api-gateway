@@ -23,8 +23,8 @@ To get started with go-api-gateway, clone the repository and follow the setup in
 
 ### Prerequisites
 
-Go (version 1.22 or later)
-Docker (for containerization and deployment)
+- Go (version 1.22 or later)
+- Docker (for containerization and deployment)
 
 ### Installation
 
