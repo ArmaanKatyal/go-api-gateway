@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"time"
 
@@ -18,6 +17,8 @@ var Port int
 type PrivateBody struct {
 	Key     string `json:"key"`
 	Message string `json:"Message"`
+	TraceID string `json:"trace_id"`
+	Claims  string `json:"claims"`
 }
 
 func main() {
@@ -40,7 +41,6 @@ func main() {
 }
 
 func hello(c echo.Context) error {
-	slog.Info("Logging TraceID", "traceID", c.Request().Header.Get("X-Trace-ID"))
 	return c.String(http.StatusOK, "Hello World! from client")
 }
 
@@ -49,11 +49,12 @@ func health(c echo.Context) error {
 }
 
 func private(c echo.Context) error {
-	slog.Info("Logging TraceID", "traceID", c.Request().Header.Get("X-Trace-ID"))
 	authToken := c.Request().Header.Get("Authorization")
 	return c.JSON(http.StatusOK, PrivateBody{
 		Key:     authToken,
+		TraceID: c.Request().Header.Get("X-Trace-ID"),
 		Message: "Accessing Private Area",
+		Claims:  c.Request().Header.Get("X-Claims"),
 	})
 }
 

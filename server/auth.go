@@ -1,7 +1,7 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -13,6 +13,7 @@ import (
 )
 
 type Claims struct {
+	Service string `json:"service"`
 	jwt.RegisteredClaims
 }
 
@@ -81,9 +82,14 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 			return ErrInvalidToken
 		}
 
-		// Append claims to context
-		ctx := context.WithValue(r.Context(), ContextKey("claims"), claims)
-		*r = *r.WithContext(ctx)
+		c, err := json.Marshal(claims)
+		if err != nil {
+			slog.Error("Error marshalling claims", "error", err.Error(), "service", name, "path", path)
+			return err
+		}
+
+		// Append claims to Header
+		r.Header.Add("X-Claims", string(c))
 	}
 	return nil
 }

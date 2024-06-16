@@ -211,8 +211,6 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	}
 	req.Header = cloneHeader(r.Header)
 
-	// TODO: maybe attach claims from request context to the forwarded request context or header
-
 	// add a unique trace id to every request for tracing
 	req.Header.Add("X-Trace-Id", uuid.NewString())
 	client := &http.Client{}
