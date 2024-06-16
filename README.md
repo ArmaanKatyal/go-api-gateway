@@ -5,7 +5,7 @@ It is a work-in-progress API Gateway built in Go, designed for learning and expe
 Features:
 
 -   [x] URL Rewriting
--   [x] Rate Limiting
+-   [x] Rate Limiting (ref: https://pkg.go.dev/golang.org/x/time/rate & https://blog.logrocket.com/rate-limiting-go-application/)
 -   [ ] Throttling
 -   [x] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
 -   [ ] Caching
@@ -13,9 +13,9 @@ Features:
 -   [ ] Orchestration/Aggregation (Ambitious feature) (really cool tho)
 -   [ ] Protocol Translation
 -   [x] IP Whitelisting
--   [x] Circuit Breaker
--   [x] Logging
--   [x] Tracing
+-   [x] Circuit Breaker (ref: https://github.com/sony/gobreaker)
+-   [x] Logging (ref: https://betterstack.com/community/guides/logging/logging-in-go/ & https://pkg.go.dev/golang.org/x/exp/slog)
+-   [x] Tracing / Metrics (ref: https://prometheus.io/docs/guides/go-application/)
 
 ## Getting Started
 
