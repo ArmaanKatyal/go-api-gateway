@@ -36,6 +36,6 @@ func (w *IPWhiteList) GetWhitelist() map[string]bool {
 	return w.Whitelist
 }
 
-func (w* IPWhiteList) UpdateWhitelist(newlist map[string]bool) {
+func (w *IPWhiteList) UpdateWhitelist(newlist map[string]bool) {
 	w.Whitelist = newlist
 }

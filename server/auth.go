@@ -17,7 +17,6 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-type ContextKey string
 type AuthError error
 
 const (
