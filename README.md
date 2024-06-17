@@ -8,7 +8,7 @@ Features:
 -   [x] Rate Limiting (ref: https://pkg.go.dev/golang.org/x/time/rate & https://blog.logrocket.com/rate-limiting-go-application/)
 -   [ ] Throttling
 -   [x] Authentication (ref: https://konghq.com/blog/engineering/jwt-kong-gateway)
--   [x] Caching
+-   [x] Caching (ref: https://github.com/patrickmn/go-cache)
 -   [x] TLS Termination
 -   [ ] Orchestration/Aggregation (Ambitious feature) (really cool tho)
 -   [ ] Protocol Translation
