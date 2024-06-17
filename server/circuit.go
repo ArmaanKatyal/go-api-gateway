@@ -8,12 +8,12 @@ import (
 )
 
 type CircuitBreaker struct {
-	Breaker *gobreaker.CircuitBreaker[[]byte]
+	breaker *gobreaker.CircuitBreaker[[]byte]
 }
 
 func NewCircuitBreaker(settings gobreaker.Settings) *CircuitBreaker {
 	return &CircuitBreaker{
-		Breaker: gobreaker.NewCircuitBreaker[[]byte](settings),
+		breaker: gobreaker.NewCircuitBreaker[[]byte](settings),
 	}
 }
 
@@ -30,10 +30,10 @@ func DefaultSettings(service string) gobreaker.Settings {
 }
 
 func (cb *CircuitBreaker) Execute(service string, f func() ([]byte, error)) ([]byte, error) {
-	slog.Info("Forwarding request using circuit breaker", "service", service, "breaker", cb.Breaker.Name)
-	return cb.Breaker.Execute(f)
+	slog.Info("Forwarding request using circuit breaker", "service", service, "breaker", cb.breaker.Name)
+	return cb.breaker.Execute(f)
 }
 
 func (cb *CircuitBreaker) IsOpen() bool {
-	return cb.Breaker.State() == gobreaker.StateOpen
+	return cb.breaker.State() == gobreaker.StateOpen
 }

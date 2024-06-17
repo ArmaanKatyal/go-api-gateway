@@ -175,18 +175,19 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 
 	slog.Info("Resolving service", "service_name", service_name)
 
-	address := rh.ServiceRegistry.GetAddress(service_name)
-	if address == "" {
+	// TODO: check cache before sending request
+
+	service := rh.ServiceRegistry.GetService(service_name)
+	if service.Addr == "" {
 		slog.Error("Service not found", "service_name", service_name)
 		http.Error(w, "service not found", http.StatusNotFound)
 		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 	// Create a new uri based on the resolved request
-	forward_uri := rh.createForwardURI(address, route, r.URL.RawQuery)
+	forward_uri := rh.createForwardURI(service.Addr, route, r.URL.RawQuery)
 
 	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", service_name)
-	service := rh.ServiceRegistry.GetService(service_name)
 
 	var err error
 	// Forward the request with or without circuit breaker
