@@ -418,6 +418,7 @@ func (sr *ServiceRegistry) Heartbeat() {
 type Cacher interface {
 	Get(string) (interface{}, bool)
 	Set(string, interface{})
+	IsEnabled() bool
 }
 
 func (sr *ServiceRegistry) GetCache(name string, key string) (interface{}, bool) {
@@ -435,4 +436,12 @@ func (sr *ServiceRegistry) SetCache(name string, key string, value interface{}) 
 	}
 	s.Cache.Set(key, value)
 	return true
+}
+
+func (sr *ServiceRegistry) IsCacheEnabled(name string) bool {
+	s := sr.GetService(name)
+	if s == nil {
+		return false
+	}
+	return s.Cache.IsEnabled()
 }

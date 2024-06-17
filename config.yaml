@@ -33,7 +33,7 @@ registry:
         routes:
           - "/private"
       cache:
-        enabled: false
+        enabled: true
         expirationInterval: 5
         cleanupInterval: 10
 ratelimiter:

@@ -174,9 +174,6 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	slog.Info("Resolving service", "service_name", service_name)
-
-	// TODO: check cache before sending request
-
 	service := rh.ServiceRegistry.GetService(service_name)
 	if service.Addr == "" {
 		slog.Error("Service not found", "service_name", service_name)
@@ -184,6 +181,26 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
+
+	// Check cache for the service
+	key := rh.generateCacheKey(service_name, r)
+	v, hit := service.Cache.Get(key)
+	if service.Cache.IsEnabled() && hit {
+		slog.Info("Cache hit", "service", service_name, "path", r.URL.Path, "method", r.Method)
+		switch value := v.(type) {
+		case []byte:
+			w.WriteHeader(http.StatusOK)
+			w.Write(value)
+			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, start)
+			return
+		default:
+			slog.Error("Wrong type data from cache", "service", service_name, "path", r.URL.Path)
+			http.Error(w, "return data type mismatch", http.StatusInternalServerError)
+			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
+			return
+		}
+	}
+
 	// Create a new uri based on the resolved request
 	forward_uri := rh.createForwardURI(service.Addr, route, r.URL.RawQuery)
 
@@ -194,7 +211,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	if rh.circuitBreakerEnabled() {
 		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name, start)
 	} else {
-		err = rh.forwardRequest(w, r, forward_uri, start)
+		err = rh.forwardRequest(w, r, forward_uri, service_name, start)
 	}
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
@@ -203,8 +220,15 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
+// generateCacheKey generates a key based on the service name and request.URL
+// TODO: maybe also include request.Headers and hash them together to generate more cohesive key
+func (rh *RequestHandler) generateCacheKey(service string, r *http.Request) string {
+	key := "cache-" + service + "-" + r.URL.String()
+	return key
+}
+
 // forwardRequest forwards the request to the resolved service
-func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string, t time.Time) error {
+func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string, service string, t time.Time) error {
 	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
 	if err != nil {
 		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
@@ -226,9 +250,21 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	w.WriteHeader(resp.StatusCode)
 	_, err = io.Copy(w, resp.Body)
 	if err != nil {
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
+
+	// Save the response in the cache
+	val, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	key := rh.generateCacheKey(service, r)
+	if ok := rh.ServiceRegistry.SetCache(service, key, val); !ok {
+		slog.Error("error setting value in cache", "service", service, "path", r.URL.String(), "key", key)
+		return errors.New("SetCache failed")
+	}
+	slog.Info("SetCache succesfull", "service", service, "path", r.URL.String(), "key", key)
+
 	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(resp.StatusCode), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
@@ -298,6 +334,15 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		return fmt.Errorf("failed to write response body: %w", err)
 	}
+
+	// Save the response in the cache
+	key := rh.generateCacheKey(service, r)
+	if ok := rh.ServiceRegistry.SetCache(service, key, body); !ok {
+		slog.Error("error setting value in cache", "service", service, "path", r.URL.String(), "key", key)
+		return errors.New("SetCache failed")
+	}
+	slog.Info("SetCache succesfull cb", "service", service, "path", r.URL.String(), "key", key)
+
 	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
@@ -317,5 +362,5 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 	_, route := rh.resolvePath(r.URL.Path)
 	forwardURI := rh.createForwardURI(fallbackURI, route, r.URL.RawQuery)
 	// Forward the request
-	return rh.forwardRequest(w, r, forwardURI, t)
+	return rh.forwardRequest(w, r, forwardURI, service, t)
 }
