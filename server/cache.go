@@ -35,7 +35,7 @@ func (c *CacheHandler) Get(key string) (interface{}, bool) {
 }
 
 func (c *CacheHandler) Set(key string, value interface{}) {
-	c.cache.Set(key, value, time.Duration(c.ExpirationInterval))
+	c.cache.Set(key, value, time.Duration(c.ExpirationInterval)*time.Minute)
 }
 
 func (c *CacheHandler) IsEnabled() bool {
