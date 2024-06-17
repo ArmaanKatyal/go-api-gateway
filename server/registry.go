@@ -26,6 +26,11 @@ type RegisterBody struct {
 		Secret    string   `json:"secret"`
 		Routes    []string `json:"routes"`
 	} `json:"auth,omitempty"`
+	Cache *struct {
+		Enabled            bool `json:"enabled"`
+		ExpirationInterval int  `json:"expirationInterval"`
+		CleanupInterval    int  `json:"cleanupInterval"`
+	} `json:"cache,omitempty"`
 }
 
 // Note: try to keep it consistent with RegisterBody
@@ -44,6 +49,11 @@ type UpdateBody struct {
 		Secret    string   `json:"secret"`
 		Routes    []string `json:"routes"`
 	} `json:"auth,omitempty"`
+	Cache *struct {
+		Enabled            bool `json:"enabled"`
+		ExpirationInterval int  `json:"expirationInterval"`
+		CleanupInterval    int  `json:"cleanupInterval"`
+	} `json:"cache,omitempty"`
 }
 
 type RegisterResponse struct {
@@ -108,6 +118,7 @@ type Service struct {
 	IPWhiteList    IPAllower       `json:"ipwhitelist"`
 	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
 	Auth           Authenticater   `json:"auth"`
+	Cache          Cacher          `json:"cache"`
 }
 
 func (s *Service) IsAuthEnabled() bool {
@@ -220,6 +231,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
 			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, v.Auth.Secret),
+			Cache:          NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
 		}
 	}
 }
@@ -262,6 +274,7 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 		IPWhiteList:    wl,
 		CircuitBreaker: NewCircuitBreaker(DefaultSettings(rb.Name)),
 		Auth:           na,
+		Cache:          NewCacheHandler(rb.Cache.Enabled, rb.Cache.ExpirationInterval, rb.Cache.CleanupInterval),
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -306,6 +319,7 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	s.IPWhiteList.UpdateWhitelist(existingLists)
 	s.FallbackUri = ub.FallbackUri
 
+	// Update auth
 	var na *JwtAuth
 	if ub.Auth != nil {
 		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, ub.Auth.Secret)
@@ -314,6 +328,16 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	}
 	s.Auth = na
 
+	// Update cache
+	var ch *CacheHandler
+	if ub.Cache != nil {
+		ch = NewCacheHandler(ub.Cache.Enabled, ub.Cache.ExpirationInterval, ub.Cache.CleanupInterval)
+	} else {
+		ch = NewCacheHandler(false, 0, 0)
+	}
+	s.Cache = ch
+
+	// Update the service in the registry
 	sr.Update(ub.Name, s)
 
 	j, err := json.Marshal(ResponseBody{Message: "service " + ub.Name + " updated"})
@@ -389,4 +413,26 @@ func (sr *ServiceRegistry) Heartbeat() {
 		}
 		sr.mu.RUnlock()
 	}
+}
+
+type Cacher interface {
+	Get(string) (interface{}, bool)
+	Set(string, interface{})
+}
+
+func (sr *ServiceRegistry) GetCache(name string, key string) (interface{}, bool) {
+	s := sr.GetService(name)
+	if s == nil {
+		return nil, false
+	}
+	return s.Cache.Get(key)
+}
+
+func (sr *ServiceRegistry) SetCache(name string, key string, value interface{}) bool {
+	s := sr.GetService(name)
+	if s == nil {
+		return false
+	}
+	s.Cache.Set(key, value)
+	return true
 }

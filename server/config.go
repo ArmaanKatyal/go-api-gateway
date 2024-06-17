@@ -65,6 +65,11 @@ type Conf struct {
 				// list of routes that require authentication
 				Routes []string `yaml:"routes"`
 			}
+			Cache struct {
+				Enabled            bool `yaml:"enabled"`
+				ExpirationInterval int  `yaml:"expirationInterval"`
+				CleanupInterval    int  `yaml:"cleanupInterval"`
+			}
 		}
 	}
 

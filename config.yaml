@@ -32,6 +32,10 @@ registry:
         secret: "./secrets/backend.txt"
         routes:
           - "/private"
+      cache:
+        enabled: false
+        expirationInterval: 5
+        cleanupInterval: 10
 ratelimiter:
   enabled: true
   maxRequestsPerMinute: 500
