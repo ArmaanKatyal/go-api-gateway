@@ -68,7 +68,7 @@ data:
     registry:
       heartbeatInterval: 15
       services:
-        - name: example
+        - name: backend
           addr: "localhost:3000"
           whitelist:
             - "ALL"
@@ -81,7 +81,7 @@ data:
             anonymous: false
             secret: "path/to/secret"
             routes:
-              - "/private3"
+              - "/private"
           cache:
             enabled: true
             expirationInterval: 5
