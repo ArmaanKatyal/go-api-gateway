@@ -5,9 +5,9 @@ server:
   writeTimeout: 10
   gracefulTimeout: 5
   tlsconfig:
-    enabled: true
-    certFile: "/certs/cert.pem"
-    keyFile: "/certs/key.pem"
+    enabled: false
+    certFile: "path/to/cert.pem"
+    keyFile: "path/to/key.pem"
   circuitbreaker:
     enabled: true
     timeout: 5
@@ -18,7 +18,7 @@ server:
 registry:
   heartbeatInterval: 15
   services:
-    - name: backend
+    - name: example
       addr: "localhost:3000"
       whitelist:
         - "ALL"
@@ -29,7 +29,7 @@ registry:
       auth:
         enabled: true
         anonymous: false
-        secret: "./secrets/backend.txt"
+        secret: "path/to/secret"
         routes:
           - "/private"
       cache:

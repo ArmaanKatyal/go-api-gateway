@@ -24,10 +24,69 @@ spec:
     spec:
       containers:
         - name: gateway
-          image: armaan24katyal/go-api-gateway:latest
+          image: armaan24katyal/go-api-gateway:v2
+          livenessProbe:
+            exec:
+              command: ["curl", "-f", "http://localhost:8080/health"]
           resources:
             limits:
               memory: "128Mi"
               cpu: "500m"
           ports:
             - containerPort: 8080
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/config
+      volumes:
+        - name: config-volume
+          configMap:
+            name: gateway-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gateway-config
+data:
+  config.yaml: |
+    server:
+      host: localhost
+      port: 8080
+      readTimeout: 5
+      writeTimeout: 10
+      gracefulTimeout: 5
+      tlsconfig:
+        enabled: false
+        certFile: "path/to/cert.pem"
+        keyFile: "path/to/key.pem"
+      circuitbreaker:
+        enabled: true
+        timeout: 5
+        interval: 0
+      metrics:
+        prefix: "gateway"
+        buckets: [0.005, 0.01, 0.025, 0.05, 0.1]
+    registry:
+      heartbeatInterval: 15
+      services:
+        - name: example
+          addr: "localhost:3000"
+          whitelist:
+            - "ALL"
+          fallbackUri: "localhost:3001"
+          health:
+            enabled: true
+            uri: "/health"
+          auth:
+            enabled: true
+            anonymous: false
+            secret: "path/to/secret"
+            routes:
+              - "/private3"
+          cache:
+            enabled: true
+            expirationInterval: 5
+            cleanupInterval: 10
+    ratelimiter:
+      enabled: true
+      maxRequestsPerMinute: 500
+      cleanupInterval: 1

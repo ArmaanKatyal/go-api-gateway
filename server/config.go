@@ -123,7 +123,7 @@ func (c *Conf) Verify() bool {
 // LoadConf loads the configuration from the config.yaml file
 func LoadConf() {
 	c := Conf{}
-	yamlFile, err := os.ReadFile("config.yaml")
+	yamlFile, err := os.ReadFile("./config/config.yaml")
 	if err != nil {
 		slog.Error("yamlFile.Get err", "error", err.Error())
 	}
