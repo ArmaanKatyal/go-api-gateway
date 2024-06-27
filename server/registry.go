@@ -119,6 +119,7 @@ type Service struct {
 	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
 	Auth           Authenticater   `json:"auth"`
 	Cache          Cacher          `json:"cache"`
+	mu             sync.Mutex
 }
 
 func (s *Service) IsAuthEnabled() bool {
@@ -162,13 +163,11 @@ func (sr *ServiceRegistry) Deregister(name string) {
 
 // GetAddress returns the address of the service with the given name
 func (sr *ServiceRegistry) GetAddress(name string) string {
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
-	val, ok := sr.Services[name]
-	if !ok {
+	s := sr.GetService(name)
+	if s == nil {
 		return ""
 	}
-	return val.Addr
+	return s.Addr
 }
 
 // GetService returns the service with the given name
@@ -183,13 +182,11 @@ func (sr *ServiceRegistry) GetService(name string) *Service {
 
 // GetFallbackUri returns the fallback uri of the service with the given name
 func (sr *ServiceRegistry) GetFallbackUri(name string) string {
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
-	val, ok := sr.Services[name]
-	if !ok {
+	s := sr.GetService(name)
+	if s == nil {
 		return ""
 	}
-	return val.FallbackUri
+	return s.FallbackUri
 }
 
 // CheckWhiteList checks if the ip is allowed to access the service
@@ -198,23 +195,19 @@ func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error)
 	if err != nil {
 		return false, err
 	}
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
-	val, ok := sr.Services[name]
-	if !ok {
-		return false, nil
+	s := sr.GetService(name)
+	if s == nil {
+		return false, errors.New("service not found")
 	}
-	return val.IPWhiteList.Allowed(ip), nil
+	return s.IPWhiteList.Allowed(ip), nil
 }
 
 func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
-	val, ok := sr.Services[name]
-	if !ok {
+	s := sr.GetService(name)
+	if s == nil {
 		return errors.New("service not found")
 	}
-	return val.Auth.Authenticate(name, r)
+	return s.Auth.Authenticate(name, r)
 }
 
 // populateRegistryServices populates the service registry with the services in the configuration
@@ -309,6 +302,10 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "service doesn't exists", http.StatusBadRequest)
 		return
 	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	// modify the address
 	s.Addr = ub.Address
 	// add the new whitelisted ip
