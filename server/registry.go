@@ -28,8 +28,8 @@ type RegisterBody struct {
 	} `json:"auth,omitempty"`
 	Cache *struct {
 		Enabled            bool `json:"enabled"`
-		ExpirationInterval int  `json:"expirationInterval"`
-		CleanupInterval    int  `json:"cleanupInterval"`
+		ExpirationInterval uint `json:"expirationInterval"`
+		CleanupInterval    uint `json:"cleanupInterval"`
 	} `json:"cache,omitempty"`
 }
 
@@ -51,8 +51,8 @@ type UpdateBody struct {
 	} `json:"auth,omitempty"`
 	Cache *struct {
 		Enabled            bool `json:"enabled"`
-		ExpirationInterval int  `json:"expirationInterval"`
-		CleanupInterval    int  `json:"cleanupInterval"`
+		ExpirationInterval uint `json:"expirationInterval"`
+		CleanupInterval    uint `json:"cleanupInterval"`
 	} `json:"cache,omitempty"`
 }
 

@@ -67,8 +67,8 @@ type Conf struct {
 			}
 			Cache struct {
 				Enabled            bool `yaml:"enabled"`
-				ExpirationInterval int  `yaml:"expirationInterval"`
-				CleanupInterval    int  `yaml:"cleanupInterval"`
+				ExpirationInterval uint `yaml:"expirationInterval"`
+				CleanupInterval    uint `yaml:"cleanupInterval"`
 			}
 		}
 	}

@@ -31,3 +31,6 @@ dclean:
 	docker stop gateway
 	docker rm -f gateway
 	docker rmi go-api-gateway:latest
+
+test:
+	go test -v ./...
