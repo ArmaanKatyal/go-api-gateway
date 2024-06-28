@@ -10,6 +10,9 @@ func populateWhiteList(w *IPWhiteList, iplist []string) {
 		w.Whitelist["ALL"] = true
 	} else {
 		for _, ip := range iplist {
+			if ip == "ALL" {
+				continue
+			}
 			w.Whitelist[ip] = true
 		}
 	}

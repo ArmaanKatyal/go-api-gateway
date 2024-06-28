@@ -189,7 +189,7 @@ func (sr *ServiceRegistry) GetFallbackUri(name string) string {
 	return s.FallbackUri
 }
 
-// CheckWhiteList checks if the ip is allowed to access the service
+// IsWhitelisted checks if the ip is allowed to access the service
 func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error) {
 	ip, _, err := net.SplitHostPort(addr)
 	if err != nil {
