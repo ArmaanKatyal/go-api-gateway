@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -217,13 +218,17 @@ func populateRegistryServices(sr *ServiceRegistry) {
 		w := NewIPWhiteList()
 		populateWhiteList(w, v.WhiteList)
 		// Note: new fields for service in the config must be added here
+		file, err := os.Open(v.Auth.Secret)
+		if err != nil {
+			slog.Error("failed to read service secret", "service", v.Name, "path", v.Auth.Secret)
+		}
 		sr.Services[v.Name] = &Service{
 			Addr:           v.Addr,
 			FallbackUri:    v.FallbackUri,
 			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
 			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
-			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, v.Auth.Secret),
+			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
 			Cache:          NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
 		}
 	}
@@ -256,9 +261,13 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 
 	var na *JwtAuth
 	if rb.Auth != nil {
-		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, rb.Auth.Secret)
+		file, err := os.Open(rb.Auth.Secret)
+		if err != nil {
+			slog.Error("failed to read service secret", "service", rb.Name, "path", rb.Auth.Secret)
+		}
+		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, file)
 	} else {
-		na = NewJwtAuth(false, false, []string{}, "")
+		na = NewJwtAuth(false, false, []string{}, nil)
 	}
 
 	sr.Register(rb.Name, &Service{
@@ -319,9 +328,13 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	// Update auth
 	var na *JwtAuth
 	if ub.Auth != nil {
-		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, ub.Auth.Secret)
+		file, err := os.Open(ub.Auth.Secret)
+		if err != nil {
+			slog.Error("failed to read service secret", "service", ub.Name, "path", ub.Auth.Secret)
+		}
+		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, file)
 	} else {
-		na = NewJwtAuth(false, false, []string{}, "")
+		na = NewJwtAuth(false, false, []string{}, nil)
 	}
 	s.Auth = na
 

@@ -3,9 +3,9 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -106,16 +106,24 @@ func (j *JwtAuth) IsEnabled() bool {
 	return j.Enabled
 }
 
-func NewJwtAuth(enabled bool, anonymous bool, routes []string, path string) *JwtAuth {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		slog.Error("Error reading secret file", "error", err.Error(), "path", path)
-		data = []byte(DEFAULT_SECRET)
+func NewJwtAuth(enabled bool, anonymous bool, routes []string, reader io.Reader) *JwtAuth {
+	if reader != nil {
+		data, err := io.ReadAll(reader)
+		if err != nil {
+			slog.Debug("Error reading secret file", "error", err.Error())
+			data = []byte(DEFAULT_SECRET)
+		}
+		return &JwtAuth{
+			Enabled:   enabled,
+			Anonymous: anonymous,
+			Routes:    routes,
+			secret:    data,
+		}
 	}
 	return &JwtAuth{
 		Enabled:   enabled,
 		Anonymous: anonymous,
 		Routes:    routes,
-		secret:    data,
+		secret:    []byte(DEFAULT_SECRET),
 	}
 }
