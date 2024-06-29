@@ -56,3 +56,14 @@ func TestAuthIsEnabled(t *testing.T) {
 	jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
 	assert.True(t, jwtAuth.IsEnabled())
 }
+
+func TestAuthGetSecret(t *testing.T) {
+	input := "test_secret_data"
+	reader := bytes.NewReader([]byte(input))
+	jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+	assert.Equal(t, []byte(input), jwtAuth.getSecret())
+}
+
+func TestAuthAuthenticate(t *testing.T) {
+
+}
