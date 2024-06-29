@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"errors"
+	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -64,6 +66,32 @@ func TestAuthGetSecret(t *testing.T) {
 	assert.Equal(t, []byte(input), jwtAuth.getSecret())
 }
 
-func TestAuthAuthenticate(t *testing.T) {
+func generateRequest(token string, path string) *http.Request {
+	req := &http.Request{
+		Header: http.Header{
+			"Authorization": []string{token},
+		},
+		URL: &url.URL{
+			Path: path,
+		},
+	}
+	return req
+}
 
+func TestAuthAuthenticate(t *testing.T) {
+	t.Run("path not in routes", func(t *testing.T) {
+		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		err := j.Authenticate("test", generateRequest("test", "/test/route2"))
+		assert.Nil(t, err)
+	})
+	t.Run("auth disabled", func(t *testing.T) {
+		j := NewJwtAuth(false, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		err := j.Authenticate("test", generateRequest("test", "/test/route1"))
+		assert.Nil(t, err)
+	})
+	t.Run("token missing", func(t *testing.T) {
+		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		err := j.Authenticate("test", generateRequest("", "/test/route1"))
+		assert.Equal(t, ErrTokenMissing, err)
+	})
 }
