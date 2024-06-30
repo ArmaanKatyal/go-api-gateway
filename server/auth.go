@@ -64,7 +64,7 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 				return nil
 			}
 			slog.Error("Error parsing token", "error", err.Error(), "service", name, "path", path)
-			return err
+			return ErrInvalidToken
 		}
 		if !parsed.Valid {
 			slog.Error("Invalid token", "service", name, "path", path)
@@ -120,6 +120,7 @@ func NewJwtAuth(enabled bool, anonymous bool, routes []string, reader io.Reader)
 			secret:    data,
 		}
 	}
+	slog.Warn("No secret file provided, using default secret")
 	return &JwtAuth{
 		Enabled:   enabled,
 		Anonymous: anonymous,

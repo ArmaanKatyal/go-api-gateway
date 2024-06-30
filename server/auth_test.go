@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
 	"testing"
+	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -78,6 +81,14 @@ func generateRequest(token string, path string) *http.Request {
 	return req
 }
 
+func generateToken(key string, exp int64) (string, error) {
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"service": "test",
+		"exp":     exp,
+	})
+	return t.SignedString([]byte(key))
+}
+
 func TestAuthAuthenticate(t *testing.T) {
 	t.Run("path not in routes", func(t *testing.T) {
 		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
@@ -93,5 +104,33 @@ func TestAuthAuthenticate(t *testing.T) {
 		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
 		err := j.Authenticate("test", generateRequest("", "/test/route1"))
 		assert.Equal(t, ErrTokenMissing, err)
+	})
+	t.Run("token missing anonymous enabled", func(t *testing.T) {
+		j := NewJwtAuth(true, true, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		err := j.Authenticate("test", generateRequest("", "/test/route1"))
+		assert.Nil(t, err)
+	})
+	t.Run("invalid token", func(t *testing.T) {
+		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		token, err := generateToken("test", 0)
+		assert.Nil(t, err)
+		err = j.Authenticate("test", generateRequest(token, "/test/route1"))
+		assert.Equal(t, ErrInvalidToken, err)
+	})
+	t.Run("valid token", func(t *testing.T) {
+		exp := time.Now().Add(time.Hour * 24).Unix()
+		token, err := generateToken("test", exp)
+		req := generateRequest(token, "/test/route1")
+		assert.Nil(t, err)
+		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		err = j.Authenticate("test", req)
+		assert.Nil(t, err)
+		claims := map[string]interface{}{
+			"service": "test",
+			"exp":     exp,
+		}
+		expected, err := json.Marshal(claims)
+		assert.Nil(t, err)
+		assert.JSONEq(t, string(expected), req.Header.Get("X-Claims"))
 	})
 }
