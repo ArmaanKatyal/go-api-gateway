@@ -2,7 +2,8 @@ package main
 
 import (
 	"log/slog"
-	"net"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,23 +37,42 @@ func (rl *RateLimiter) cleanupVisitors() {
 	}
 }
 
-// Allow checks if the visitor is allowed to make a request
-func (rl *RateLimiter) Allow(address string) bool {
-	rl.mu.Lock()
-	ip, _, err := net.SplitHostPort(address)
-	if err != nil {
-		slog.Error("Error splitting address", "error", err.Error())
+func isValidV4(address string) bool {
+	parts := strings.Split(address, ".")
+
+	if len(parts) < 4 {
 		return false
 	}
 
-	if _, found := rl.visitors[ip]; !found {
-		rl.visitors[ip] = &client{
+	for _, x := range parts {
+		if i, err := strconv.Atoi(x); err == nil {
+			if i < 0 || i > 255 {
+				return false
+			}
+		} else {
+			return false
+		}
+
+	}
+	return true
+}
+
+// Allow checks if the visitor is allowed to make a request
+func (rl *RateLimiter) Allow(address string) bool {
+	rl.mu.Lock()
+	if !isValidV4(address) {
+		slog.Error("invalid ip address")
+		return false
+	}
+
+	if _, found := rl.visitors[address]; !found {
+		rl.visitors[address] = &client{
 			limiter: rate.NewLimiter(rate.Every(time.Minute), AppConfig.RateLimiter.MaxRequestsPerMinute),
 		}
 	}
-	rl.visitors[ip].lastSeen = time.Now()
+	rl.visitors[address].lastSeen = time.Now()
 
-	if !rl.visitors[ip].limiter.Allow() {
+	if !rl.visitors[address].limiter.Allow() {
 		rl.mu.Unlock()
 		return false
 	}
