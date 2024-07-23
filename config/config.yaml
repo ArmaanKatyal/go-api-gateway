@@ -38,5 +38,6 @@ registry:
         cleanupInterval: 10
 ratelimiter:
   enabled: true
-  maxRequestsPerMinute: 500
+  maxRequests: 500
   cleanupInterval: 1
+  eventInterval: 60

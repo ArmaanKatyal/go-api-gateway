@@ -37,6 +37,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 	}
 }
 
+// isValidV4 checks if the address is a valid IPV4 address
 func isValidV4(address string) bool {
 	parts := strings.Split(address, ".")
 
@@ -60,24 +61,24 @@ func isValidV4(address string) bool {
 // Allow checks if the visitor is allowed to make a request
 func (rl *RateLimiter) Allow(address string) bool {
 	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	address = strings.Split(address, ":")[0]
 	if !isValidV4(address) {
 		slog.Error("invalid ip address")
 		return false
 	}
 
-	if _, found := rl.visitors[address]; !found {
-		rl.visitors[address] = &client{
-			limiter: rate.NewLimiter(rate.Every(time.Minute), AppConfig.RateLimiter.MaxRequestsPerMinute),
+	v, found := rl.visitors[address]
+	if !found {
+		v = &client{
+			limiter: rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimiter.EventInterval)*time.Second),
+				AppConfig.RateLimiter.MaxRequests),
 		}
+		rl.visitors[address] = v
 	}
-	rl.visitors[address].lastSeen = time.Now()
-
-	if !rl.visitors[address].limiter.Allow() {
-		rl.mu.Unlock()
-		return false
-	}
-	rl.mu.Unlock()
-	return true
+	v.lastSeen = time.Now()
+	return v.limiter.Allow()
 }
 
 func NewRateLimiter(metrics *PromMetrics) *RateLimiter {

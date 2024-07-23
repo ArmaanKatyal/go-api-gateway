@@ -76,9 +76,11 @@ type Conf struct {
 	RateLimiter struct {
 		Enabled bool `yaml:"enabled"`
 		// Maximum number of requests per minute
-		MaxRequestsPerMinute int `yaml:"maxRequestsPerMinute"`
+		MaxRequests int `yaml:"maxRequests"`
 		// Interval (mins) at which the rate limiter will clean up old visitors
 		CleanupInterval int `yaml:"cleanupInterval"`
+		// Interval (secs) between events to rate limit
+		EventInterval uint `yaml:"eventInterval"`
 	}
 }
 
@@ -105,8 +107,8 @@ func (c *Conf) Verify() bool {
 	if c.Registry.HeartbeatInterval == 0 {
 		c.Registry.HeartbeatInterval = 30
 	}
-	if c.RateLimiter.MaxRequestsPerMinute == 0 {
-		c.RateLimiter.MaxRequestsPerMinute = 100
+	if c.RateLimiter.MaxRequests == 0 {
+		c.RateLimiter.MaxRequests = 100
 	}
 	if c.Server.CircuitBreaker.Timeout == 0 {
 		c.Server.CircuitBreaker.Timeout = 10
