@@ -190,7 +190,13 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 		switch value := v.(type) {
 		case []byte:
 			w.WriteHeader(http.StatusOK)
-			w.Write(value)
+			_, err := w.Write(value)
+			if err != nil {
+				slog.Error("Error writing response", "error", err.Error())
+				http.Error(w, "error writing response", http.StatusInternalServerError)
+				rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
+				return
+			}
 			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		default:
