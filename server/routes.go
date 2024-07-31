@@ -101,8 +101,8 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	return mux
 }
 
-func (rh *RequestHandler) circuitBreakerEnabled() bool {
-	return AppConfig.Server.CircuitBreaker.Enabled
+func (rh *RequestHandler) circuitBreakerEnabled(svc string) bool {
+	return rh.ServiceRegistry.GetService(svc).CircuitBreaker.IsEnabled()
 }
 
 func (rh *RequestHandler) rateLimiterEnabled() bool {
@@ -214,7 +214,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 
 	var err error
 	// Forward the request with or without circuit breaker
-	if rh.circuitBreakerEnabled() {
+	if rh.circuitBreakerEnabled(service_name) {
 		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name, start)
 	} else {
 		err = rh.forwardRequest(w, r, forward_uri, service_name, start)

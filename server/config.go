@@ -30,12 +30,6 @@ type Conf struct {
 			KeyFile  string `yaml:"keyFile"`
 		}
 
-		CircuitBreaker struct {
-			Enabled  bool `yaml:"enabled"`
-			Timeout  int  `yaml:"timeout"`
-			Interval int  `yaml:"interval"`
-		}
-
 		Metrics struct {
 			Prefix  string    `yaml:"prefix"`
 			Buckets []float64 `yaml:"buckets"`
@@ -70,6 +64,7 @@ type Conf struct {
 				ExpirationInterval uint `yaml:"expirationInterval"`
 				CleanupInterval    uint `yaml:"cleanupInterval"`
 			}
+			CircuitBreaker CircuitSettings
 		}
 	}
 
@@ -109,12 +104,6 @@ func (c *Conf) Verify() bool {
 	}
 	if c.RateLimiter.MaxRequests == 0 {
 		c.RateLimiter.MaxRequests = 100
-	}
-	if c.Server.CircuitBreaker.Timeout == 0 {
-		c.Server.CircuitBreaker.Timeout = 10
-	}
-	if c.Server.CircuitBreaker.Interval == 0 {
-		c.Server.CircuitBreaker.Interval = 10
 	}
 	if c.RateLimiter.CleanupInterval == 0 {
 		c.RateLimiter.CleanupInterval = 2

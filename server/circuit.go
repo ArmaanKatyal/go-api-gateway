@@ -8,24 +8,33 @@ import (
 )
 
 type CircuitBreaker struct {
-	breaker *gobreaker.CircuitBreaker[[]byte]
+	Settings CircuitSettings `json:"settings"`
+	breaker  *gobreaker.CircuitBreaker[[]byte]
 }
 
-func NewCircuitBreaker(settings gobreaker.Settings) *CircuitBreaker {
-	return &CircuitBreaker{
-		breaker: gobreaker.NewCircuitBreaker[[]byte](settings),
+type CircuitSettings struct {
+	Enabled      bool    `yaml:"enabled"`
+	Timeout      uint    `yaml:"timeout"`
+	Interval     uint    `yaml:"interval"`
+	FailureRatio float64 `yaml:"failureRatio"`
+}
+
+func (cs *CircuitSettings) into(name string) gobreaker.Settings {
+	return gobreaker.Settings{
+		Name:     "cb-" + name,
+		Timeout:  time.Duration(cs.Timeout) * time.Second,
+		Interval: time.Duration(cs.Interval) * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return failureRatio >= cs.FailureRatio
+		},
 	}
 }
 
-func DefaultSettings(service string) gobreaker.Settings {
-	return gobreaker.Settings{
-		Name:     "cb-" + service,
-		Timeout:  time.Duration(AppConfig.Server.CircuitBreaker.Timeout) * time.Second,
-		Interval: time.Duration(AppConfig.Server.CircuitBreaker.Interval) * time.Second,
-		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
-			return counts.Requests >= 3 && failureRatio >= 0.6
-		},
+func NewCircuitBreaker(svc_name string, settings CircuitSettings) *CircuitBreaker {
+	return &CircuitBreaker{
+		Settings: settings,
+		breaker:  gobreaker.NewCircuitBreaker[[]byte](settings.into(svc_name)),
 	}
 }
 
@@ -36,4 +45,8 @@ func (cb *CircuitBreaker) Execute(service string, f func() ([]byte, error)) ([]b
 
 func (cb *CircuitBreaker) IsOpen() bool {
 	return cb.breaker.State() == gobreaker.StateOpen
+}
+
+func (cb *CircuitBreaker) IsEnabled() bool {
+	return cb.Settings.Enabled
 }
