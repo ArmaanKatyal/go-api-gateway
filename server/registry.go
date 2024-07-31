@@ -32,6 +32,7 @@ type RegisterBody struct {
 		ExpirationInterval uint `json:"expirationInterval"`
 		CleanupInterval    uint `json:"cleanupInterval"`
 	} `json:"cache,omitempty"`
+	CircuitBreaker CircuitSettings
 }
 
 // Note: try to keep it consistent with RegisterBody
@@ -83,6 +84,7 @@ type Authenticater interface {
 type CircuitExecuter interface {
 	Execute(string, func() ([]byte, error)) ([]byte, error)
 	IsOpen() bool
+	IsEnabled() bool
 }
 
 // Interface for handling IP whitelist
@@ -227,7 +229,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			FallbackUri:    v.FallbackUri,
 			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
-			CircuitBreaker: NewCircuitBreaker(DefaultSettings(v.Name)),
+			CircuitBreaker: NewCircuitBreaker(v.Name, v.CircuitBreaker),
 			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
 			Cache:          NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
 		}
@@ -274,7 +276,7 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 		Addr:           rb.Address,
 		FallbackUri:    rb.FallbackUri,
 		IPWhiteList:    wl,
-		CircuitBreaker: NewCircuitBreaker(DefaultSettings(rb.Name)),
+		CircuitBreaker: NewCircuitBreaker(rb.Name, rb.CircuitBreaker),
 		Auth:           na,
 		Cache:          NewCacheHandler(rb.Cache.Enabled, rb.Cache.ExpirationInterval, rb.Cache.CleanupInterval),
 	})

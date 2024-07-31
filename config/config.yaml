@@ -8,10 +8,6 @@ server:
     enabled: false
     certFile: "path/to/cert.pem"
     keyFile: "path/to/key.pem"
-  circuitbreaker:
-    enabled: true
-    timeout: 5
-    interval: 0
   metrics:
     prefix: "gateway"
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1]
@@ -36,6 +32,11 @@ registry:
         enabled: true
         expirationInterval: 5
         cleanupInterval: 10
+      circuitbreaker:
+        enabled: true
+        timeout: 5
+        interval: 0
+        failureRatio: 0.5
 ratelimiter:
   enabled: true
   maxRequests: 500
