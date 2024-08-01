@@ -54,7 +54,7 @@ type Conf struct {
 		Metrics struct {
 			Prefix  string    `yaml:"prefix"`
 			Buckets []float64 `yaml:"buckets"`
-		} `yaml:"metrics"`
+		} `yaml:"observability"`
 	}
 
 	Registry struct {

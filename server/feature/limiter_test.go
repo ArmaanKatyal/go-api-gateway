@@ -1,4 +1,4 @@
-package main
+package feature
 
 import (
 	"github.com/ArmaanKatyal/go_api_gateway/server/config"

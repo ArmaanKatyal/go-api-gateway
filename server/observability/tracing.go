@@ -1,4 +1,4 @@
-package main
+package observability
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 )
 
 type PromMetrics struct {
-	// Note: just collecting basic metrics anything more complex not needed for this project
+	// Note: just collecting basic observability anything more complex not needed for this project
 	prefix                    string
 	httpTransactionTotal      *prometheus.CounterVec
 	httpResponseTimeHistogram *prometheus.HistogramVec
@@ -37,7 +37,7 @@ func (m *MetricsInput) ToList() []string {
 	return values
 }
 
-// getLabels returns a list of labels for the Prometheus metrics
+// getLabels returns a list of labels for the Prometheus observability
 func getLabels() []string {
 	var labels []string
 	metricsInputType := reflect.TypeOf(MetricsInput{})
@@ -71,7 +71,7 @@ func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput) {
 	pm.httpTransactionTotal.WithLabelValues(input.ToList()...).Inc()
 }
 
-// Collect collects the ResponseTime and HttpTransaction metrics
+// Collect collects the ResponseTime and HttpTransaction observability
 func (pm *PromMetrics) Collect(input *MetricsInput, t time.Time) {
 	elapsed := time.Since(t).Seconds()
 	pm.ObserveResponseTime(input, elapsed)

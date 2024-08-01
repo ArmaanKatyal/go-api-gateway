@@ -1,10 +1,10 @@
-package main
+package feature
 
 type IPWhiteList struct {
 	Whitelist map[string]bool `json:"whitelist"`
 }
 
-func populateWhiteList(w *IPWhiteList, ipList []string) {
+func PopulateIPWhiteList(w *IPWhiteList, ipList []string) {
 	if len(ipList) > 0 && ipList[0] == "ALL" {
 		// Allow all ip ranges
 		w.Whitelist["ALL"] = true

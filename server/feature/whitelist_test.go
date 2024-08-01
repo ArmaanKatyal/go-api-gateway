@@ -1,4 +1,4 @@
-package main
+package feature
 
 import (
 	"testing"
@@ -14,18 +14,18 @@ func TestNewIPWhiteList(t *testing.T) {
 func TestPopulateWhiteList(t *testing.T) {
 	t.Run("ip list empty", func(t *testing.T) {
 		w := NewIPWhiteList()
-		populateWhiteList(w, []string{})
+		PopulateIPWhiteList(w, []string{})
 		assert.Len(t, w.Whitelist, 0)
 	})
 	t.Run("global allow at index 0", func(t *testing.T) {
 		w := NewIPWhiteList()
-		populateWhiteList(w, []string{"ALL", "1.1.1.1", "2.2.2.2"})
+		PopulateIPWhiteList(w, []string{"ALL", "1.1.1.1", "2.2.2.2"})
 		assert.Len(t, w.Whitelist, 1)
 		assert.True(t, w.Allowed("ALL"))
 	})
 	t.Run("global allow not at index 0", func(t *testing.T) {
 		w := NewIPWhiteList()
-		populateWhiteList(w, []string{"1.1.1.1", "ALL", "2.2.2.2"})
+		PopulateIPWhiteList(w, []string{"1.1.1.1", "ALL", "2.2.2.2"})
 		assert.Len(t, w.Whitelist, 2)
 		assert.False(t, w.Allowed("ALL"))
 		assert.True(t, w.Allowed("1.1.1.1"))

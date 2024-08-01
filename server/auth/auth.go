@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"encoding/json"
@@ -20,7 +20,7 @@ type Claims struct {
 type AuthError error
 
 const (
-	DEFAULT_SECRET = "test"
+	DefaultSecret = "test"
 )
 
 var (
@@ -111,7 +111,7 @@ func NewJwtAuth(enabled bool, anonymous bool, routes []string, reader io.Reader)
 		data, err := io.ReadAll(reader)
 		if err != nil {
 			slog.Debug("Error reading secret file", "error", err.Error())
-			data = []byte(DEFAULT_SECRET)
+			data = []byte(DefaultSecret)
 		}
 		return &JwtAuth{
 			Enabled:   enabled,
@@ -125,6 +125,6 @@ func NewJwtAuth(enabled bool, anonymous bool, routes []string, reader io.Reader)
 		Enabled:   enabled,
 		Anonymous: anonymous,
 		Routes:    routes,
-		secret:    []byte(DEFAULT_SECRET),
+		secret:    []byte(DefaultSecret),
 	}
 }
