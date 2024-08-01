@@ -3,6 +3,10 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"io"
 	"log/slog"
 	"net/http"
@@ -16,15 +20,15 @@ import (
 
 type RequestHandler struct {
 	ServiceRegistry *ServiceRegistry
-	RateLimiter     *RateLimiter
-	Metrics         *PromMetrics
+	RateLimiter     *feature.RateLimiter
+	Metrics         *observability.PromMetrics
 }
 
 func NewRequestHandler() *RequestHandler {
-	m := NewPromMetrics()
+	m := observability.NewPromMetrics()
 	return &RequestHandler{
 		ServiceRegistry: NewServiceRegistry(m),
-		RateLimiter:     NewRateLimiter(m),
+		RateLimiter:     feature.NewRateLimiter(m),
 		Metrics:         m,
 	}
 }
@@ -65,7 +69,7 @@ func GetStatusCode(statusCode int) string {
 	return http.StatusText(statusCode)
 }
 
-// health is a simple health check endpoint
+// Health is a simple health check endpoint
 func Health(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Health check", "req", RequestToMap(r))
 	w.WriteHeader(http.StatusOK)
@@ -74,12 +78,12 @@ func Health(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// config returns the application configuration
+// Config returns the application configuration
 func Config(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Get config", "req", RequestToMap(r))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
+	if _, err := w.Write(config.AppConfig.GetConfMarshal()); err != nil {
 		slog.Error("Error writing response", "error", err.Error())
 	}
 }
@@ -87,7 +91,7 @@ func Config(w http.ResponseWriter, r *http.Request) {
 // InitializeRoutes initializes the application routes
 func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.ServiceRegistry.Heartbeat()
-	go r.RateLimiter.cleanupVisitors()
+	go r.RateLimiter.CleanupVisitors()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/register", r.ServiceRegistry.RegisterService)
@@ -106,10 +110,10 @@ func (rh *RequestHandler) circuitBreakerEnabled(svc string) bool {
 }
 
 func (rh *RequestHandler) rateLimiterEnabled() bool {
-	return AppConfig.RateLimiter.Enabled
+	return config.AppConfig.RateLimiter.Enabled
 }
 
-func (rh *RequestHandler) CollectMetrics(input *MetricsInput, t time.Time) {
+func (rh *RequestHandler) CollectMetrics(input *observability.MetricsInput, t time.Time) {
 	rh.Metrics.Collect(input, t)
 }
 
@@ -142,33 +146,33 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	if ok, err := rh.ServiceRegistry.IsWhitelisted(service_name, r.RemoteAddr); !ok || err != nil {
 		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 	if rh.rateLimiterEnabled() && !rh.RateLimiter.Allow(r.RemoteAddr) {
 		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
 		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 
 	if err := rh.ServiceRegistry.Authenticate(service_name, r); err != nil {
 		// If Auth fails reject the request with an appropriate message and status code
 		switch err {
-		case ErrTokenMissing:
+		case auth.ErrTokenMissing:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
 			http.Error(w, "token missing", http.StatusUnauthorized)
-			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
+			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
-		case ErrInvalidToken:
+		case auth.ErrInvalidToken:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
 			http.Error(w, "invalid token", http.StatusUnauthorized)
-			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
+			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		default:
 			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
 			http.Error(w, "auth failed", http.StatusUnauthorized)
-			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
+			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		}
 	}
@@ -178,7 +182,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	if service.Addr == "" {
 		slog.Error("Service not found", "service_name", service_name)
 		http.Error(w, "service not found", http.StatusNotFound)
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 
@@ -194,15 +198,15 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 			if err != nil {
 				slog.Error("Error writing response", "error", err.Error())
 				http.Error(w, "error writing response", http.StatusInternalServerError)
-				rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
+				rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 				return
 			}
-			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, start)
+			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		default:
 			slog.Error("Wrong type data from cache", "service", service_name, "path", r.URL.Path)
 			http.Error(w, "return data type mismatch", http.StatusInternalServerError)
-			rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
+			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		}
 	}
@@ -222,7 +226,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 	}
 }
 
@@ -237,7 +241,7 @@ func (rh *RequestHandler) generateCacheKey(service string, r *http.Request) stri
 func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string, service string, t time.Time) error {
 	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
 	if err != nil {
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
 	req.Header = cloneHeader(r.Header)
@@ -247,10 +251,12 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	// Copy the response from the resolved service
 	copyResponseHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)
@@ -271,7 +277,7 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 	}
 	slog.Info("SetCache succesfull", "service", service, "path", r.URL.String(), "key", key)
 
-	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(resp.StatusCode), Method: r.Method, Route: r.URL.String()}, t)
+	rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(resp.StatusCode), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
 
@@ -311,7 +317,9 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return nil, fmt.Errorf("request execution failed: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(resp.Body)
 
 		// Copy response headers and status code
 		copyResponseHeaders(w, resp)
@@ -349,7 +357,7 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 	}
 	slog.Info("SetCache succesfull cb", "service", service, "path", r.URL.String(), "key", key)
 
-	rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, t)
+	rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
 }
 
@@ -360,7 +368,7 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 	if fallbackURI == "" {
 		slog.Error("Fallback URI not found", "service_name", service)
 		http.Error(w, "fallback uri not found", http.StatusNotFound)
-		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, t)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, t)
 		return nil
 	}
 

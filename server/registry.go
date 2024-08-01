@@ -3,6 +3,10 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,8 +15,8 @@ import (
 	"time"
 )
 
-// Note: try to keep it consistent with the conf.registry.services struct
 type RegisterBody struct {
+	// Note: try to keep it consistent with the config.registry.services struct
 	Name        string   `json:"name"`
 	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
@@ -32,11 +36,11 @@ type RegisterBody struct {
 		ExpirationInterval uint `json:"expirationInterval"`
 		CleanupInterval    uint `json:"cleanupInterval"`
 	} `json:"cache,omitempty"`
-	CircuitBreaker CircuitSettings
+	CircuitBreaker config.CircuitSettings
 }
 
-// Note: try to keep it consistent with RegisterBody
 type UpdateBody struct {
+	// Note: try to keep it consistent with RegisterBody
 	Name        string   `json:"name"`
 	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
@@ -74,20 +78,20 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
-// Interface for authenticating requests
+// Authenticater Interface for authenticating requests
 type Authenticater interface {
-	Authenticate(string, *http.Request) AuthError
+	Authenticate(string, *http.Request) auth.AuthError
 	IsEnabled() bool
 }
 
-// Interface for executing circuit breaker
+// CircuitExecuter Interface for executing circuit breaker
 type CircuitExecuter interface {
 	Execute(string, func() ([]byte, error)) ([]byte, error)
 	IsOpen() bool
 	IsEnabled() bool
 }
 
-// Interface for handling IP whitelist
+// IPAllower Interface for handling IP whitelist
 type IPAllower interface {
 	Allowed(string) bool
 	GetWhitelist() map[string]bool
@@ -118,7 +122,7 @@ type Service struct {
 	Addr           string `json:"addr"`
 	FallbackUri    string `json:"fallbackUri"`
 	Health         *HealthCheck
-	IPWhiteList    IPAllower       `json:"ipwhitelist"`
+	IPWhiteList    IPAllower       `json:"ipWhitelist"`
 	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
 	Auth           Authenticater   `json:"auth"`
 	Cache          Cacher          `json:"cache"`
@@ -131,7 +135,7 @@ func (s *Service) IsAuthEnabled() bool {
 
 type ServiceRegistry struct {
 	mu       sync.RWMutex
-	Metrics  *PromMetrics
+	Metrics  *observability.PromMetrics
 	Services map[string]*Service `json:"services"`
 }
 
@@ -216,9 +220,9 @@ func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
 // populateRegistryServices populates the service registry with the services in the configuration
 func populateRegistryServices(sr *ServiceRegistry) {
 	slog.Info("Populating registry services")
-	for _, v := range AppConfig.Registry.Services {
-		w := NewIPWhiteList()
-		populateWhiteList(w, v.WhiteList)
+	for _, v := range config.AppConfig.Registry.Services {
+		w := feature.NewIPWhiteList()
+		feature.PopulateIPWhiteList(w, v.WhiteList)
 		// Note: new fields for service in the config must be added here
 		file, err := os.Open(v.Auth.Secret)
 		if err != nil {
@@ -229,14 +233,14 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			FallbackUri:    v.FallbackUri,
 			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
 			IPWhiteList:    w,
-			CircuitBreaker: NewCircuitBreaker(v.Name, v.CircuitBreaker),
-			Auth:           NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
-			Cache:          NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
+			CircuitBreaker: feature.NewCircuitBreaker(v.Name, v.CircuitBreaker),
+			Auth:           auth.NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
+			Cache:          feature.NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
 		}
 	}
 }
 
-func NewServiceRegistry(metrics *PromMetrics) *ServiceRegistry {
+func NewServiceRegistry(metrics *observability.PromMetrics) *ServiceRegistry {
 	r := ServiceRegistry{
 		Services: make(map[string]*Service),
 		Metrics:  metrics,
@@ -258,27 +262,27 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 
 	// TODO: do a schema validation before actually adding the service. duh ¯\_(ツ)_/¯
 
-	wl := NewIPWhiteList()
-	populateWhiteList(wl, rb.WhiteList)
+	wl := feature.NewIPWhiteList()
+	feature.PopulateIPWhiteList(wl, rb.WhiteList)
 
-	var na *JwtAuth
+	var na *auth.JwtAuth
 	if rb.Auth != nil {
 		file, err := os.Open(rb.Auth.Secret)
 		if err != nil {
 			slog.Error("failed to read service secret", "service", rb.Name, "path", rb.Auth.Secret)
 		}
-		na = NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, file)
+		na = auth.NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, file)
 	} else {
-		na = NewJwtAuth(false, false, []string{}, nil)
+		na = auth.NewJwtAuth(false, false, []string{}, nil)
 	}
 
 	sr.Register(rb.Name, &Service{
 		Addr:           rb.Address,
 		FallbackUri:    rb.FallbackUri,
 		IPWhiteList:    wl,
-		CircuitBreaker: NewCircuitBreaker(rb.Name, rb.CircuitBreaker),
+		CircuitBreaker: feature.NewCircuitBreaker(rb.Name, rb.CircuitBreaker),
 		Auth:           na,
-		Cache:          NewCacheHandler(rb.Cache.Enabled, rb.Cache.ExpirationInterval, rb.Cache.CleanupInterval),
+		Cache:          feature.NewCacheHandler(rb.Cache.Enabled, rb.Cache.ExpirationInterval, rb.Cache.CleanupInterval),
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -293,7 +297,7 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 	}
 }
 
-// UpdateService updates a existing service in the registry
+// UpdateService updates an existing service in the registry
 func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Updating service", "req", RequestToMap(r))
 	// TODO: only provide the fields that need to be updated, instead of the whole schema
@@ -328,24 +332,24 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	s.FallbackUri = ub.FallbackUri
 
 	// Update auth
-	var na *JwtAuth
+	var na *auth.JwtAuth
 	if ub.Auth != nil {
 		file, err := os.Open(ub.Auth.Secret)
 		if err != nil {
 			slog.Error("failed to read service secret", "service", ub.Name, "path", ub.Auth.Secret)
 		}
-		na = NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, file)
+		na = auth.NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, file)
 	} else {
-		na = NewJwtAuth(false, false, []string{}, nil)
+		na = auth.NewJwtAuth(false, false, []string{}, nil)
 	}
 	s.Auth = na
 
 	// Update cache
-	var ch *CacheHandler
+	var ch *feature.CacheHandler
 	if ub.Cache != nil {
-		ch = NewCacheHandler(ub.Cache.Enabled, ub.Cache.ExpirationInterval, ub.Cache.CleanupInterval)
+		ch = feature.NewCacheHandler(ub.Cache.Enabled, ub.Cache.ExpirationInterval, ub.Cache.CleanupInterval)
 	} else {
-		ch = NewCacheHandler(false, 0, 0)
+		ch = feature.NewCacheHandler(false, 0, 0)
 	}
 	s.Cache = ch
 
@@ -407,9 +411,9 @@ func (sr *ServiceRegistry) GetServices(w http.ResponseWriter, r *http.Request) {
 // Heartbeat checks the health of the registered services
 func (sr *ServiceRegistry) Heartbeat() {
 	for {
-		time.Sleep(time.Duration(AppConfig.Registry.HeartbeatInterval) * time.Second)
+		time.Sleep(time.Duration(config.AppConfig.Registry.HeartbeatInterval) * time.Second)
 		sr.mu.RLock()
-		slog.Info("Heartbeating registered services")
+		slog.Info("Heartbeat registered services")
 		for name, v := range sr.Services {
 			if v.Health.IsEnabled() {
 				resp, err := http.Get("http://" + v.Addr + v.Health.GetUri())
@@ -420,7 +424,7 @@ func (sr *ServiceRegistry) Heartbeat() {
 				if resp.StatusCode != http.StatusOK {
 					slog.Warn("Service is unhealthy", "name", name, "address", v.Addr)
 				}
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}
 		sr.mu.RUnlock()

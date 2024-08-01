@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 // Mock for a failing reader (returns an error on read)
 type failingReader struct{}
 
-func (failingReader) Read(p []byte) (n int, err error) {
+func (failingReader) Read([]byte) (n int, err error) {
 	return 0, errors.New("read error")
 }
 
@@ -36,7 +36,7 @@ func TestAuthNewJwtAuth(t *testing.T) {
 		assert.True(t, jwtAuth.Enabled)
 		assert.False(t, jwtAuth.Anonymous)
 		assert.Len(t, jwtAuth.Routes, 2)
-		assert.Equal(t, []byte(DEFAULT_SECRET), jwtAuth.getSecret())
+		assert.Equal(t, []byte(DefaultSecret), jwtAuth.getSecret())
 	})
 }
 

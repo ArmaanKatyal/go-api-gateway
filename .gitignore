@@ -2,3 +2,4 @@ bin
 certs
 secrets
 testdata
+.idea

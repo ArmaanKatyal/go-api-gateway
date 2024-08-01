@@ -1,4 +1,4 @@
-package main
+package feature
 
 import (
 	"time"
@@ -8,8 +8,8 @@ import (
 
 type CacheHandler struct {
 	Enabled            bool `json:"enabled"`
-	ExpirationInterval uint  `json:"expirationInterval"`
-	CleanupInterval    uint  `json:"cleanupInterval"`
+	ExpirationInterval uint `json:"expirationInterval"`
+	CleanupInterval    uint `json:"cleanupInterval"`
 	cache              *cache.Cache
 }
 

@@ -1,6 +1,8 @@
-package main
+package feature
 
 import (
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -17,19 +19,19 @@ type client struct {
 
 type RateLimiter struct {
 	mu sync.RWMutex
-	// just here if needed to record any metrics from the rate limiter
-	Metrics  *PromMetrics
+	// just here if needed to record any observability from the rate limiter
+	Metrics  *observability.PromMetrics
 	visitors map[string]*client
 }
 
-// cleanupVisitors removes visitors that haven't been seen in the last 2 minutes
-func (rl *RateLimiter) cleanupVisitors() {
+// CleanupVisitors removes visitors that haven't been seen in the last 2 minutes
+func (rl *RateLimiter) CleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
 		rl.mu.Lock()
 		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > time.Duration(AppConfig.RateLimiter.CleanupInterval)*time.Minute {
+			if time.Since(v.lastSeen) > time.Duration(config.AppConfig.RateLimiter.CleanupInterval)*time.Minute {
 				delete(rl.visitors, ip)
 			}
 		}
@@ -72,8 +74,8 @@ func (rl *RateLimiter) Allow(address string) bool {
 	v, found := rl.visitors[address]
 	if !found {
 		v = &client{
-			limiter: rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimiter.EventInterval)*time.Second),
-				AppConfig.RateLimiter.MaxRequests),
+			limiter: rate.NewLimiter(rate.Every(time.Duration(config.AppConfig.RateLimiter.EventInterval)*time.Second),
+				config.AppConfig.RateLimiter.MaxRequests),
 		}
 		rl.visitors[address] = v
 	}
@@ -81,7 +83,7 @@ func (rl *RateLimiter) Allow(address string) bool {
 	return v.limiter.Allow()
 }
 
-func NewRateLimiter(metrics *PromMetrics) *RateLimiter {
+func NewRateLimiter(metrics *observability.PromMetrics) *RateLimiter {
 	return &RateLimiter{
 		visitors: make(map[string]*client),
 		Metrics:  metrics,

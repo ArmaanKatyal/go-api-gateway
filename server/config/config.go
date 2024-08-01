@@ -1,16 +1,37 @@
-package main
+package config
 
 import (
 	"encoding/json"
+	"github.com/sony/gobreaker/v2"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
 // AppConfig is the global configuration object
 var AppConfig Conf
+
+type CircuitSettings struct {
+	Enabled      bool    `yaml:"enabled"`
+	Timeout      uint    `yaml:"timeout"`
+	Interval     uint    `yaml:"interval"`
+	FailureRatio float64 `yaml:"failureRatio"`
+}
+
+func (cs *CircuitSettings) Into(name string) gobreaker.Settings {
+	return gobreaker.Settings{
+		Name:     "cb-" + name,
+		Timeout:  time.Duration(cs.Timeout) * time.Second,
+		Interval: time.Duration(cs.Interval) * time.Second,
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
+			return failureRatio >= cs.FailureRatio
+		},
+	}
+}
 
 type Conf struct {
 	Server struct {
@@ -33,7 +54,7 @@ type Conf struct {
 		Metrics struct {
 			Prefix  string    `yaml:"prefix"`
 			Buckets []float64 `yaml:"buckets"`
-		} `yaml:"metrics"`
+		} `yaml:"observability"`
 	}
 
 	Registry struct {
