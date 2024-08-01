@@ -21,6 +21,7 @@ import (
 
 type RequestHandler struct {
 	ServiceRegistry *ServiceRegistry
+	RateLimiter     *feature.RateLimiter
 	Metrics         *observability.PromMetrics
 }
 
@@ -28,6 +29,7 @@ func NewRequestHandler() *RequestHandler {
 	m := observability.NewPromMetrics()
 	return &RequestHandler{
 		ServiceRegistry: NewServiceRegistry(m),
+		RateLimiter:     feature.NewRateLimiter(),
 		Metrics:         m,
 	}
 }
@@ -90,8 +92,8 @@ func Config(w http.ResponseWriter, r *http.Request) {
 // InitializeRoutes initializes the application routes
 func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.ServiceRegistry.Heartbeat()
-	rl := feature.NewRateLimiter()
-	go rl.CleanupVisitors()
+	go r.RateLimiter.CleanupVisitors()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/register", r.ServiceRegistry.RegisterService)
 	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.DeregisterService)
@@ -99,7 +101,7 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	mux.HandleFunc("POST /services/update", r.ServiceRegistry.UpdateService)
 	mux.HandleFunc("GET /health", Health)
 	mux.HandleFunc("GET /config", Config)
-	mux.HandleFunc("/", middleware.RateLimiterMiddleware(rl)(r.HandleRequest))
+	mux.HandleFunc("/", middleware.RateLimiterMiddleware(r.RateLimiter)(r.HandleRequest))
 	mux.Handle("GET /metrics", promhttp.Handler())
 	return mux
 }
