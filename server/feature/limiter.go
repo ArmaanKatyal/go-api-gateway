@@ -2,36 +2,41 @@ package feature
 
 import (
 	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
+	"golang.org/x/time/rate"
 	"log/slog"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
-
-	"golang.org/x/time/rate"
 )
 
-type client struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
+type Visitor struct {
+	Limiter  *rate.Limiter
+	LastSeen time.Time
 }
 
 type RateLimiter struct {
-	mu sync.RWMutex
-	// just here if needed to record any observability from the rate limiter
-	Metrics  *observability.PromMetrics
-	visitors map[string]*client
+	mu       sync.Mutex
+	visitors map[string]*Visitor
+	rate     rate.Limit
+	burst    int
 }
 
-// CleanupVisitors removes visitors that haven't been seen in the last 2 minutes
+func NewRateLimiter() *RateLimiter {
+	rl := &RateLimiter{
+		mu:       sync.Mutex{},
+		visitors: make(map[string]*Visitor),
+		rate:     rate.Every(time.Duration(config.AppConfig.RateLimiter.EventInterval) * time.Second),
+		burst:    config.AppConfig.RateLimiter.MaxRequests,
+	}
+	return rl
+}
+
 func (rl *RateLimiter) CleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
 		rl.mu.Lock()
 		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > time.Duration(config.AppConfig.RateLimiter.CleanupInterval)*time.Minute {
+			if time.Since(v.LastSeen) > time.Duration(config.AppConfig.RateLimiter.CleanupInterval)*time.Minute {
 				delete(rl.visitors, ip)
 			}
 		}
@@ -39,53 +44,27 @@ func (rl *RateLimiter) CleanupVisitors() {
 	}
 }
 
-// isValidV4 checks if the address is a valid IPV4 address
-func isValidV4(address string) bool {
-	parts := strings.Split(address, ".")
-
-	if len(parts) < 4 {
-		return false
-	}
-
-	for _, x := range parts {
-		if i, err := strconv.Atoi(x); err == nil {
-			if i < 0 || i > 255 {
-				return false
-			}
-		} else {
-			return false
-		}
-
-	}
-	return true
-}
-
-// Allow checks if the visitor is allowed to make a request
-func (rl *RateLimiter) Allow(address string) bool {
+func (rl *RateLimiter) AddIP(ip string) *Visitor {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	address = strings.Split(address, ":")[0]
-	if !isValidV4(address) {
-		slog.Error("invalid ip address")
-		return false
+	c := &Visitor{
+		Limiter:  rate.NewLimiter(rl.rate, rl.burst),
+		LastSeen: time.Now(),
 	}
 
-	v, found := rl.visitors[address]
-	if !found {
-		v = &client{
-			limiter: rate.NewLimiter(rate.Every(time.Duration(config.AppConfig.RateLimiter.EventInterval)*time.Second),
-				config.AppConfig.RateLimiter.MaxRequests),
-		}
-		rl.visitors[address] = v
-	}
-	v.lastSeen = time.Now()
-	return v.limiter.Allow()
+	rl.visitors[ip] = c
+
+	return c
 }
 
-func NewRateLimiter(metrics *observability.PromMetrics) *RateLimiter {
-	return &RateLimiter{
-		visitors: make(map[string]*client),
-		Metrics:  metrics,
+func (rl *RateLimiter) GetVisitor(ip string) *Visitor {
+	rl.mu.Lock()
+	l, exists := rl.visitors[ip]
+	if !exists {
+		rl.mu.Unlock()
+		return rl.AddIP(ip)
 	}
+	rl.mu.Unlock()
+	return l
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
 	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/middleware"
 	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"io"
 	"log/slog"
@@ -20,7 +21,6 @@ import (
 
 type RequestHandler struct {
 	ServiceRegistry *ServiceRegistry
-	RateLimiter     *feature.RateLimiter
 	Metrics         *observability.PromMetrics
 }
 
@@ -28,7 +28,6 @@ func NewRequestHandler() *RequestHandler {
 	m := observability.NewPromMetrics()
 	return &RequestHandler{
 		ServiceRegistry: NewServiceRegistry(m),
-		RateLimiter:     feature.NewRateLimiter(m),
 		Metrics:         m,
 	}
 }
@@ -91,8 +90,8 @@ func Config(w http.ResponseWriter, r *http.Request) {
 // InitializeRoutes initializes the application routes
 func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.ServiceRegistry.Heartbeat()
-	go r.RateLimiter.CleanupVisitors()
-
+	rl := feature.NewRateLimiter()
+	go rl.CleanupVisitors()
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/register", r.ServiceRegistry.RegisterService)
 	mux.HandleFunc("POST /services/deregister", r.ServiceRegistry.DeregisterService)
@@ -100,7 +99,7 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	mux.HandleFunc("POST /services/update", r.ServiceRegistry.UpdateService)
 	mux.HandleFunc("GET /health", Health)
 	mux.HandleFunc("GET /config", Config)
-	mux.HandleFunc("/", r.HandleRequest)
+	mux.HandleFunc("/", middleware.RateLimiterMiddleware(rl)(r.HandleRequest))
 	mux.Handle("GET /metrics", promhttp.Handler())
 	return mux
 }
@@ -131,66 +130,60 @@ func (rh *RequestHandler) createForwardURI(address string, route []string, query
 	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
 		address = "http://" + address
 	}
-	forward_uri := address + "/" + strings.Join(route, "/")
+	forwardUri := address + "/" + strings.Join(route, "/")
 	if query != "" {
-		forward_uri = forward_uri + "?" + query
+		forwardUri = forwardUri + "?" + query
 	}
-	return forward_uri
+	return forwardUri
 }
 
 // HandleRequest handles the incoming request and forwards it to the resolved service
 func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	slog.Info("Received request", "req", RequestToMap(r))
-	service_name, route := rh.resolvePath(r.URL.Path)
-	if ok, err := rh.ServiceRegistry.IsWhitelisted(service_name, r.RemoteAddr); !ok || err != nil {
-		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
+	serviceName, route := rh.resolvePath(r.URL.Path)
+	if ok, err := rh.ServiceRegistry.IsWhitelisted(serviceName, r.RemoteAddr); !ok || err != nil {
+		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", serviceName)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
-	if rh.rateLimiterEnabled() && !rh.RateLimiter.Allow(r.RemoteAddr) {
-		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", service_name)
-		http.Error(w, "rate limit exceeded", http.StatusTooManyRequests)
-		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
-		return
-	}
 
-	if err := rh.ServiceRegistry.Authenticate(service_name, r); err != nil {
+	if err := rh.ServiceRegistry.Authenticate(serviceName, r); err != nil {
 		// If Auth fails reject the request with an appropriate message and status code
 		switch err {
 		case auth.ErrTokenMissing:
-			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			slog.Error("Auth failed", "service_name", serviceName, "error", err.Error())
 			http.Error(w, "token missing", http.StatusUnauthorized)
 			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		case auth.ErrInvalidToken:
-			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			slog.Error("Auth failed", "service_name", serviceName, "error", err.Error())
 			http.Error(w, "invalid token", http.StatusUnauthorized)
 			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		default:
-			slog.Error("Auth failed", "service_name", service_name, "error", err.Error())
+			slog.Error("Auth failed", "service_name", serviceName, "error", err.Error())
 			http.Error(w, "auth failed", http.StatusUnauthorized)
 			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		}
 	}
 
-	slog.Info("Resolving service", "service_name", service_name)
-	service := rh.ServiceRegistry.GetService(service_name)
+	slog.Info("Resolving service", "service_name", serviceName)
+	service := rh.ServiceRegistry.GetService(serviceName)
 	if service.Addr == "" {
-		slog.Error("Service not found", "service_name", service_name)
+		slog.Error("Service not found", "service_name", serviceName)
 		http.Error(w, "service not found", http.StatusNotFound)
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 
 	// Check cache for the service
-	key := rh.generateCacheKey(service_name, r)
+	key := rh.generateCacheKey(serviceName, r)
 	v, hit := service.Cache.Get(key)
 	if service.Cache.IsEnabled() && hit {
-		slog.Info("Cache hit", "service", service_name, "path", r.URL.Path, "method", r.Method)
+		slog.Info("Cache hit", "service", serviceName, "path", r.URL.Path, "method", r.Method)
 		switch value := v.(type) {
 		case []byte:
 			w.WriteHeader(http.StatusOK)
@@ -204,7 +197,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, start)
 			return
 		default:
-			slog.Error("Wrong type data from cache", "service", service_name, "path", r.URL.Path)
+			slog.Error("Wrong type data from cache", "service", serviceName, "path", r.URL.Path)
 			http.Error(w, "return data type mismatch", http.StatusInternalServerError)
 			rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 			return
@@ -214,17 +207,17 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	// Create a new uri based on the resolved request
 	forward_uri := rh.createForwardURI(service.Addr, route, r.URL.RawQuery)
 
-	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", service_name)
+	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", serviceName)
 
 	var err error
 	// Forward the request with or without circuit breaker
-	if rh.circuitBreakerEnabled(service_name) {
-		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, service_name, start)
+	if rh.circuitBreakerEnabled(serviceName) {
+		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, serviceName, start)
 	} else {
-		err = rh.forwardRequest(w, r, forward_uri, service_name, start)
+		err = rh.forwardRequest(w, r, forward_uri, serviceName, start)
 	}
 	if err != nil {
-		slog.Error("Error forwarding request", "error", err.Error(), "service_name", service_name)
+		slog.Error("Error forwarding request", "error", err.Error(), "service_name", serviceName)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 	}
