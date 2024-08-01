@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"reflect"
 	"time"
 
@@ -9,8 +10,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
-// Note: just collecting basic metrics anything more complex not needed for this project
 type PromMetrics struct {
+	// Note: just collecting basic metrics anything more complex not needed for this project
 	prefix                    string
 	httpTransactionTotal      *prometheus.CounterVec
 	httpResponseTimeHistogram *prometheus.HistogramVec
@@ -47,7 +48,7 @@ func getLabels() []string {
 }
 
 func NewPromMetrics() *PromMetrics {
-	prefix := AppConfig.Server.Metrics.Prefix
+	prefix := config.AppConfig.Server.Metrics.Prefix
 	return &PromMetrics{
 		prefix: prefix,
 		httpTransactionTotal: promauto.NewCounterVec(prometheus.CounterOpts{
@@ -58,7 +59,7 @@ func NewPromMetrics() *PromMetrics {
 			Name: prefix + "_response_time_seconds",
 			Help: "Histogram of response time for handler",
 		}, getLabels()),
-		buckets: AppConfig.Server.Metrics.Buckets,
+		buckets: config.AppConfig.Server.Metrics.Buckets,
 	}
 }
 
@@ -66,7 +67,7 @@ func (pm *PromMetrics) ObserveResponseTime(input *MetricsInput, time float64) {
 	pm.httpResponseTimeHistogram.WithLabelValues(input.ToList()...).Observe(time)
 }
 
-func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput, time float64) {
+func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput) {
 	pm.httpTransactionTotal.WithLabelValues(input.ToList()...).Inc()
 }
 
@@ -74,5 +75,5 @@ func (pm *PromMetrics) IncHttpTransaction(input *MetricsInput, time float64) {
 func (pm *PromMetrics) Collect(input *MetricsInput, t time.Time) {
 	elapsed := time.Since(t).Seconds()
 	pm.ObserveResponseTime(input, elapsed)
-	pm.IncHttpTransaction(input, elapsed)
+	pm.IncHttpTransaction(input)
 }

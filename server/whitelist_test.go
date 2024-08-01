@@ -12,7 +12,7 @@ func TestNewIPWhiteList(t *testing.T) {
 }
 
 func TestPopulateWhiteList(t *testing.T) {
-	t.Run("iplist empty", func(t *testing.T) {
+	t.Run("ip list empty", func(t *testing.T) {
 		w := NewIPWhiteList()
 		populateWhiteList(w, []string{})
 		assert.Len(t, w.Whitelist, 0)

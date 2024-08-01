@@ -1,40 +1,20 @@
 package main
 
 import (
-	"log/slog"
-	"time"
-
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"github.com/sony/gobreaker/v2"
+	"log/slog"
 )
 
 type CircuitBreaker struct {
-	Settings CircuitSettings `json:"settings"`
+	Settings config.CircuitSettings `json:"settings"`
 	breaker  *gobreaker.CircuitBreaker[[]byte]
 }
 
-type CircuitSettings struct {
-	Enabled      bool    `yaml:"enabled"`
-	Timeout      uint    `yaml:"timeout"`
-	Interval     uint    `yaml:"interval"`
-	FailureRatio float64 `yaml:"failureRatio"`
-}
-
-func (cs *CircuitSettings) into(name string) gobreaker.Settings {
-	return gobreaker.Settings{
-		Name:     "cb-" + name,
-		Timeout:  time.Duration(cs.Timeout) * time.Second,
-		Interval: time.Duration(cs.Interval) * time.Second,
-		ReadyToTrip: func(counts gobreaker.Counts) bool {
-			failureRatio := float64(counts.TotalFailures) / float64(counts.Requests)
-			return failureRatio >= cs.FailureRatio
-		},
-	}
-}
-
-func NewCircuitBreaker(svc_name string, settings CircuitSettings) *CircuitBreaker {
+func NewCircuitBreaker(svcName string, settings config.CircuitSettings) *CircuitBreaker {
 	return &CircuitBreaker{
 		Settings: settings,
-		breaker:  gobreaker.NewCircuitBreaker[[]byte](settings.into(svc_name)),
+		breaker:  gobreaker.NewCircuitBreaker[[]byte](settings.Into(svcName)),
 	}
 }
 

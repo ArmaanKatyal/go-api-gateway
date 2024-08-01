@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,8 +12,8 @@ import (
 	"time"
 )
 
-// Note: try to keep it consistent with the conf.registry.services struct
 type RegisterBody struct {
+	// Note: try to keep it consistent with the config.registry.services struct
 	Name        string   `json:"name"`
 	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
@@ -32,11 +33,11 @@ type RegisterBody struct {
 		ExpirationInterval uint `json:"expirationInterval"`
 		CleanupInterval    uint `json:"cleanupInterval"`
 	} `json:"cache,omitempty"`
-	CircuitBreaker CircuitSettings
+	CircuitBreaker config.CircuitSettings
 }
 
-// Note: try to keep it consistent with RegisterBody
 type UpdateBody struct {
+	// Note: try to keep it consistent with RegisterBody
 	Name        string   `json:"name"`
 	Address     string   `json:"addr"`
 	WhiteList   []string `json:"whitelist"`
@@ -216,7 +217,7 @@ func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
 // populateRegistryServices populates the service registry with the services in the configuration
 func populateRegistryServices(sr *ServiceRegistry) {
 	slog.Info("Populating registry services")
-	for _, v := range AppConfig.Registry.Services {
+	for _, v := range config.AppConfig.Registry.Services {
 		w := NewIPWhiteList()
 		populateWhiteList(w, v.WhiteList)
 		// Note: new fields for service in the config must be added here
@@ -407,9 +408,9 @@ func (sr *ServiceRegistry) GetServices(w http.ResponseWriter, r *http.Request) {
 // Heartbeat checks the health of the registered services
 func (sr *ServiceRegistry) Heartbeat() {
 	for {
-		time.Sleep(time.Duration(AppConfig.Registry.HeartbeatInterval) * time.Second)
+		time.Sleep(time.Duration(config.AppConfig.Registry.HeartbeatInterval) * time.Second)
 		sr.mu.RLock()
-		slog.Info("Heartbeating registered services")
+		slog.Info("Heartbeat registered services")
 		for name, v := range sr.Services {
 			if v.Health.IsEnabled() {
 				resp, err := http.Get("http://" + v.Addr + v.Health.GetUri())
@@ -420,7 +421,7 @@ func (sr *ServiceRegistry) Heartbeat() {
 				if resp.StatusCode != http.StatusOK {
 					slog.Warn("Service is unhealthy", "name", name, "address", v.Addr)
 				}
-				resp.Body.Close()
+				_ = resp.Body.Close()
 			}
 		}
 		sr.mu.RUnlock()

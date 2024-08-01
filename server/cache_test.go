@@ -33,46 +33,46 @@ func TestCacheHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cache := NewCacheHandler(tt.given.enabled, tt.given.expirationInterval, tt.given.cleanupInterval)
-			assert.Equal(t, tt.expected.enabled, cache.Enabled)
-			assert.Equal(t, tt.expected.expirationInterval, cache.ExpirationInterval)
-			assert.Equal(t, tt.expected.cleanupInterval, cache.CleanupInterval)
+			cacheHandler := NewCacheHandler(tt.given.enabled, tt.given.expirationInterval, tt.given.cleanupInterval)
+			assert.Equal(t, tt.expected.enabled, cacheHandler.Enabled)
+			assert.Equal(t, tt.expected.expirationInterval, cacheHandler.ExpirationInterval)
+			assert.Equal(t, tt.expected.cleanupInterval, cacheHandler.CleanupInterval)
 		})
 	}
 }
 
 func TestCacheGet(t *testing.T) {
 	t.Run("success get value", func(t *testing.T) {
-		cache := NewCacheHandler(true, 5, 10)
-		cache.Set("test", "value")
-		value, found := cache.Get("test")
+		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler.Set("test", "value")
+		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
 	})
 	t.Run("fail get value", func(t *testing.T) {
-		cache := NewCacheHandler(true, 5, 10)
-		value, found := cache.Get("test")
+		cacheHandler := NewCacheHandler(true, 5, 10)
+		value, found := cacheHandler.Get("test")
 		assert.False(t, found)
 		assert.Nil(t, value)
 	})
 	t.Run("override value", func(t *testing.T) {
-		cache := NewCacheHandler(true, 5, 10)
-		cache.Set("test", "value")
-		cache.Set("test", "new value")
-		value, found := cache.Get("test")
+		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler.Set("test", "value")
+		cacheHandler.Set("test", "new value")
+		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "new value", value)
 	})
 	t.Run("expired value", func(t *testing.T) {
-		cache := CacheHandler{
+		cacheHandler := CacheHandler{
 			Enabled:            true,
 			ExpirationInterval: 1,
 			CleanupInterval:    1,
 			cache:              cache.New(time.Duration(1)*time.Millisecond, time.Duration(1)*time.Millisecond),
 		}
-		cache.cache.Set("test", "value", time.Duration(1)*time.Millisecond)
+		cacheHandler.cache.Set("test", "value", time.Duration(1)*time.Millisecond)
 		time.Sleep(10 * time.Millisecond)
-		value, found := cache.Get("test")
+		value, found := cacheHandler.Get("test")
 		assert.False(t, found)
 		assert.Nil(t, value)
 	})
@@ -80,17 +80,17 @@ func TestCacheGet(t *testing.T) {
 
 func TestCacheSet(t *testing.T) {
 	t.Run("success set value", func(t *testing.T) {
-		cache := NewCacheHandler(true, 5, 10)
-		cache.Set("test", "value")
-		value, found := cache.Get("test")
+		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler.Set("test", "value")
+		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
 	})
 	t.Run("override value", func(t *testing.T) {
-		cache := NewCacheHandler(true, 5, 10)
-		cache.Set("test", "value")
-		cache.Set("test", "new value")
-		value, found := cache.Get("test")
+		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler.Set("test", "value")
+		cacheHandler.Set("test", "new value")
+		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "new value", value)
 	})

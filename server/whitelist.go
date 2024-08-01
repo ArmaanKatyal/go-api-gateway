@@ -4,12 +4,12 @@ type IPWhiteList struct {
 	Whitelist map[string]bool `json:"whitelist"`
 }
 
-func populateWhiteList(w *IPWhiteList, iplist []string) {
-	if len(iplist) > 0 && iplist[0] == "ALL" {
+func populateWhiteList(w *IPWhiteList, ipList []string) {
+	if len(ipList) > 0 && ipList[0] == "ALL" {
 		// Allow all ip ranges
 		w.Whitelist["ALL"] = true
 	} else {
-		for _, ip := range iplist {
+		for _, ip := range ipList {
 			if ip == "ALL" {
 				continue
 			}
@@ -39,6 +39,6 @@ func (w *IPWhiteList) GetWhitelist() map[string]bool {
 	return w.Whitelist
 }
 
-func (w *IPWhiteList) UpdateWhitelist(newlist map[string]bool) {
-	w.Whitelist = newlist
+func (w *IPWhiteList) UpdateWhitelist(newList map[string]bool) {
+	w.Whitelist = newList
 }

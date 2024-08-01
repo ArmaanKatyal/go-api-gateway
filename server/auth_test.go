@@ -16,7 +16,7 @@ import (
 // Mock for a failing reader (returns an error on read)
 type failingReader struct{}
 
-func (failingReader) Read(p []byte) (n int, err error) {
+func (failingReader) Read([]byte) (n int, err error) {
 	return 0, errors.New("read error")
 }
 

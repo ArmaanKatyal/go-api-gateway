@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ func (rl *RateLimiter) cleanupVisitors() {
 		rl.mu.Lock()
 		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > time.Duration(AppConfig.RateLimiter.CleanupInterval)*time.Minute {
+			if time.Since(v.lastSeen) > time.Duration(config.AppConfig.RateLimiter.CleanupInterval)*time.Minute {
 				delete(rl.visitors, ip)
 			}
 		}
@@ -72,8 +73,8 @@ func (rl *RateLimiter) Allow(address string) bool {
 	v, found := rl.visitors[address]
 	if !found {
 		v = &client{
-			limiter: rate.NewLimiter(rate.Every(time.Duration(AppConfig.RateLimiter.EventInterval)*time.Second),
-				AppConfig.RateLimiter.MaxRequests),
+			limiter: rate.NewLimiter(rate.Every(time.Duration(config.AppConfig.RateLimiter.EventInterval)*time.Second),
+				config.AppConfig.RateLimiter.MaxRequests),
 		}
 		rl.visitors[address] = v
 	}

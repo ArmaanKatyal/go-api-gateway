@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"log/slog"
 	"net/http"
 	"os"
@@ -22,7 +23,7 @@ func main() {
 	slog.SetDefault(logger)
 
 	// Load configuration
-	LoadConf()
+	config.LoadConf()
 	// Initialize registry
 	rh := NewRequestHandler()
 	router := InitializeRoutes(rh)
@@ -31,18 +32,18 @@ func main() {
 		MinVersion: tls.VersionTLS12,
 	}
 	server := &http.Server{
-		Addr:         ":" + AppConfig.Server.Port,
+		Addr:         ":" + config.AppConfig.Server.Port,
 		Handler:      router,
-		ReadTimeout:  time.Duration(AppConfig.Server.ReadTimeout) * time.Second,
-		WriteTimeout: time.Duration(AppConfig.Server.WriteTimeout) * time.Second,
+		ReadTimeout:  time.Duration(config.AppConfig.Server.ReadTimeout) * time.Second,
+		WriteTimeout: time.Duration(config.AppConfig.Server.WriteTimeout) * time.Second,
 		TLSConfig:    tlsConfig,
 	}
 
-	slog.Info("API Gateway started", "port", AppConfig.Server.Port)
+	slog.Info("API Gateway started", "port", config.AppConfig.Server.Port)
 	go func() {
 		// Start server
-		if TLSEnabled() {
-			if err := server.ListenAndServeTLS(GetCertFile(), GetKeyFile()); err != nil {
+		if config.TLSEnabled() {
+			if err := server.ListenAndServeTLS(config.GetCertFile(), config.GetKeyFile()); err != nil {
 				slog.Error("Error starting server", "error", err.Error())
 				os.Exit(1)
 			}
@@ -59,7 +60,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt)
 
 	<-stop
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(AppConfig.Server.GracefulTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(config.AppConfig.Server.GracefulTimeout)*time.Second)
 	defer cancel()
 	slog.Info("Gracefully shutting down server")
 	if err := server.Shutdown(ctx); err != nil {

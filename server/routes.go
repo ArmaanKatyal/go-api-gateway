@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"io"
 	"log/slog"
 	"net/http"
@@ -65,7 +66,7 @@ func GetStatusCode(statusCode int) string {
 	return http.StatusText(statusCode)
 }
 
-// health is a simple health check endpoint
+// Health is a simple health check endpoint
 func Health(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Health check", "req", RequestToMap(r))
 	w.WriteHeader(http.StatusOK)
@@ -74,12 +75,12 @@ func Health(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// config returns the application configuration
+// Config returns the application configuration
 func Config(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Get config", "req", RequestToMap(r))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(AppConfig.GetConfMarshal()); err != nil {
+	if _, err := w.Write(config.AppConfig.GetConfMarshal()); err != nil {
 		slog.Error("Error writing response", "error", err.Error())
 	}
 }
@@ -106,7 +107,7 @@ func (rh *RequestHandler) circuitBreakerEnabled(svc string) bool {
 }
 
 func (rh *RequestHandler) rateLimiterEnabled() bool {
-	return AppConfig.RateLimiter.Enabled
+	return config.AppConfig.RateLimiter.Enabled
 }
 
 func (rh *RequestHandler) CollectMetrics(input *MetricsInput, t time.Time) {
@@ -250,7 +251,9 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 		rh.CollectMetrics(&MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 	// Copy the response from the resolved service
 	copyResponseHeaders(w, resp)
 	w.WriteHeader(resp.StatusCode)
@@ -311,7 +314,9 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 		if err != nil {
 			return nil, fmt.Errorf("request execution failed: %w", err)
 		}
-		defer resp.Body.Close()
+		defer func(Body io.ReadCloser) {
+			_ = Body.Close()
+		}(resp.Body)
 
 		// Copy response headers and status code
 		copyResponseHeaders(w, resp)

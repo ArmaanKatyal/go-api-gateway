@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"testing"
 	"time"
 
@@ -26,14 +27,14 @@ func TestLimiterAllow(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			AppConfig.RateLimiter.MaxRequests = 60
+			config.AppConfig.RateLimiter.MaxRequests = 60
 			l := NewRateLimiter(nil)
 			assert.Equal(t, tt.expected, l.Allow(tt.input))
 		})
 	}
 	t.Run("Rate limiting", func(t *testing.T) {
-		AppConfig.RateLimiter.MaxRequests = 1
-		AppConfig.RateLimiter.EventInterval = 1
+		config.AppConfig.RateLimiter.MaxRequests = 1
+		config.AppConfig.RateLimiter.EventInterval = 1
 		l := NewRateLimiter(nil)
 		assert.True(t, l.Allow("1.1.1.1:8080"))
 		assert.False(t, l.Allow("1.1.1.1:8080"))
