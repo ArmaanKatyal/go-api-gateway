@@ -2,17 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
-	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 )
 
 type RegisterBody struct {
@@ -80,7 +80,7 @@ type DeregisterResponse struct {
 
 // Authenticater Interface for authenticating requests
 type Authenticater interface {
-	Authenticate(string, *http.Request) auth.AuthError
+	Authenticate(*http.Request) auth.AuthError
 	IsEnabled() bool
 }
 
@@ -140,8 +140,28 @@ func (s *Service) IsRateLimiterEnabled() bool {
 }
 
 func (s *Service) RateLimitIP(ip string) bool {
+	ip, _, err := net.SplitHostPort(ip)
+	if err != nil {
+		return false
+	}
 	v := s.RateLimiter.GetVisitor(ip)
 	return v.Limiter.Allow()
+}
+
+func (s *Service) IsWhitelisted(addr string) (bool, error) {
+	ip, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false, err
+	}
+	return s.IPWhiteList.Allowed(ip), nil
+}
+
+func (s *Service) GetFallbackUri() string {
+	return s.FallbackUri
+}
+
+func (s *Service) Authenticate(r *http.Request) error {
+	return s.Auth.Authenticate(r)
 }
 
 type ServiceRegistry struct {
@@ -205,27 +225,6 @@ func (sr *ServiceRegistry) GetFallbackUri(name string) string {
 		return ""
 	}
 	return s.FallbackUri
-}
-
-// IsWhitelisted checks if the ip is allowed to access the service
-func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error) {
-	ip, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false, err
-	}
-	s := sr.GetService(name)
-	if s == nil {
-		return false, errors.New("service not found")
-	}
-	return s.IPWhiteList.Allowed(ip), nil
-}
-
-func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
-	s := sr.GetService(name)
-	if s == nil {
-		return errors.New("service not found")
-	}
-	return s.Auth.Authenticate(name, r)
 }
 
 // populateRegistryServices populates the service registry with the services in the configuration

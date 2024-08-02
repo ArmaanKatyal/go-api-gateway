@@ -3,16 +3,17 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
-	"github.com/ArmaanKatyal/go_api_gateway/server/middleware"
-	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"io"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/middleware"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -152,14 +153,14 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
-	if ok, err := rh.ServiceRegistry.IsWhitelisted(serviceName, r.RemoteAddr); !ok || err != nil {
+	if ok, err := service.IsWhitelisted(r.RemoteAddr); !ok || err != nil {
 		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", serviceName)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusUnauthorized), Method: r.Method, Route: r.URL.String()}, start)
 		return
 	}
 
-	if err := rh.ServiceRegistry.Authenticate(serviceName, r); err != nil {
+	if err := service.Authenticate(r); err != nil {
 		// If Auth fails reject the request with an appropriate message and status code
 		switch err {
 		case auth.ErrTokenMissing:
