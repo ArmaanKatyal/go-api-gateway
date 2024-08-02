@@ -13,30 +13,22 @@ type Visitor struct {
 	LastSeen time.Time
 }
 
-type RateLimiter struct {
+type BaseRateLimiter struct {
+	Enabled  bool
 	mu       sync.Mutex
 	visitors map[string]*Visitor
-	rate     rate.Limit
-	burst    int
+	Rate     rate.Limit
+	Burst    int
+	Cleanup  int
 }
 
-func NewRateLimiter() *RateLimiter {
-	rl := &RateLimiter{
-		mu:       sync.Mutex{},
-		visitors: make(map[string]*Visitor),
-		rate:     rate.Every(time.Duration(config.AppConfig.RateLimiter.EventInterval) * time.Second),
-		burst:    config.AppConfig.RateLimiter.MaxRequests,
-	}
-	return rl
-}
-
-func (rl *RateLimiter) CleanupVisitors() {
+func (rl *BaseRateLimiter) CleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
 		rl.mu.Lock()
 		slog.Info("Cleaning up visitors")
 		for ip, v := range rl.visitors {
-			if time.Since(v.LastSeen) > time.Duration(config.AppConfig.RateLimiter.CleanupInterval)*time.Minute {
+			if time.Since(v.LastSeen) > time.Duration(rl.Cleanup)*time.Second {
 				delete(rl.visitors, ip)
 			}
 		}
@@ -44,27 +36,68 @@ func (rl *RateLimiter) CleanupVisitors() {
 	}
 }
 
-func (rl *RateLimiter) AddIP(ip string) *Visitor {
+func (rl *BaseRateLimiter) AddIP(ip string) *Visitor {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
 
-	c := &Visitor{
-		Limiter:  rate.NewLimiter(rl.rate, rl.burst),
+	v := &Visitor{
+		Limiter:  rate.NewLimiter(rl.Rate, rl.Burst),
 		LastSeen: time.Now(),
 	}
 
-	rl.visitors[ip] = c
-
-	return c
+	rl.visitors[ip] = v
+	return v
 }
 
-func (rl *RateLimiter) GetVisitor(ip string) *Visitor {
+func (rl *BaseRateLimiter) GetVisitor(ip string) *Visitor {
 	rl.mu.Lock()
-	l, exists := rl.visitors[ip]
+	v, exists := rl.visitors[ip]
 	if !exists {
 		rl.mu.Unlock()
 		return rl.AddIP(ip)
 	}
 	rl.mu.Unlock()
-	return l
+	return v
+}
+
+func (rl *BaseRateLimiter) IsEnabled() bool {
+	return rl.Enabled
+}
+
+type ServiceRateLimiter struct {
+	BaseRateLimiter
+}
+
+func NewServiceRateLimiter(conf *config.RateLimiterSettings) *ServiceRateLimiter {
+	rl := &ServiceRateLimiter{
+		BaseRateLimiter: BaseRateLimiter{
+			Enabled:  conf.Enabled,
+			mu:       sync.Mutex{},
+			visitors: make(map[string]*Visitor),
+			Rate:     rate.Limit(conf.Rate),
+			Burst:    conf.Burst,
+			Cleanup:  conf.CleanupInterval,
+		},
+	}
+	go rl.CleanupVisitors()
+	return rl
+}
+
+type GlobalRateLimiter struct {
+	BaseRateLimiter
+}
+
+func NewGlobalRateLimiter() *GlobalRateLimiter {
+	rl := &GlobalRateLimiter{
+		BaseRateLimiter: BaseRateLimiter{
+			Enabled:  config.AppConfig.Server.RateLimiter.Enabled,
+			mu:       sync.Mutex{},
+			visitors: make(map[string]*Visitor),
+			Rate:     rate.Limit(config.AppConfig.Server.RateLimiter.Rate),
+			Burst:    config.AppConfig.Server.RateLimiter.Burst,
+			Cleanup:  config.AppConfig.Server.RateLimiter.CleanupInterval,
+		},
+	}
+	go rl.CleanupVisitors()
+	return rl
 }

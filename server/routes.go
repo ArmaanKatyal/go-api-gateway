@@ -21,7 +21,7 @@ import (
 
 type RequestHandler struct {
 	ServiceRegistry *ServiceRegistry
-	RateLimiter     *feature.RateLimiter
+	RateLimiter     *feature.GlobalRateLimiter
 	Metrics         *observability.PromMetrics
 }
 
@@ -29,7 +29,7 @@ func NewRequestHandler() *RequestHandler {
 	m := observability.NewPromMetrics()
 	return &RequestHandler{
 		ServiceRegistry: NewServiceRegistry(m),
-		RateLimiter:     feature.NewRateLimiter(),
+		RateLimiter:     feature.NewGlobalRateLimiter(),
 		Metrics:         m,
 	}
 }
@@ -67,7 +67,7 @@ func RequestToMap(r *http.Request) map[string]interface{} {
 }
 
 func GetStatusCode(statusCode int) string {
-	return http.StatusText(statusCode)
+	return string(rune(statusCode))
 }
 
 // Health is a simple health check endpoint
@@ -92,7 +92,6 @@ func Config(w http.ResponseWriter, r *http.Request) {
 // InitializeRoutes initializes the application routes
 func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 	go r.ServiceRegistry.Heartbeat()
-	go r.RateLimiter.CleanupVisitors()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /services/register", r.ServiceRegistry.RegisterService)
@@ -108,10 +107,6 @@ func InitializeRoutes(r *RequestHandler) *http.ServeMux {
 
 func (rh *RequestHandler) circuitBreakerEnabled(svc string) bool {
 	return rh.ServiceRegistry.GetService(svc).CircuitBreaker.IsEnabled()
-}
-
-func (rh *RequestHandler) rateLimiterEnabled() bool {
-	return config.AppConfig.RateLimiter.Enabled
 }
 
 func (rh *RequestHandler) CollectMetrics(input *observability.MetricsInput, t time.Time) {
@@ -144,6 +139,19 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	start := time.Now()
 	slog.Info("Received request", "req", RequestToMap(r))
 	serviceName, route := rh.resolvePath(r.URL.Path)
+	slog.Info("Resolving service", "service_name", serviceName)
+	service := rh.ServiceRegistry.GetService(serviceName)
+	if service == nil {
+		slog.Error("No service exists with the provided name", "service", serviceName)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+	if service.IsRateLimiterEnabled() && !service.RateLimitIP(r.RemoteAddr) {
+		slog.Error("Rate limit exceeded", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service", serviceName)
+		http.Error(w, http.StatusText(http.StatusTooManyRequests), http.StatusTooManyRequests)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusTooManyRequests), Method: r.Method, Route: r.URL.String()}, start)
+		return
+	}
 	if ok, err := rh.ServiceRegistry.IsWhitelisted(serviceName, r.RemoteAddr); !ok || err != nil {
 		slog.Error("Unauthorized request", "path", r.URL.Path, "method", r.Method, "ip", r.RemoteAddr, "service_name", serviceName)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -172,8 +180,6 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	slog.Info("Resolving service", "service_name", serviceName)
-	service := rh.ServiceRegistry.GetService(serviceName)
 	if service.Addr == "" {
 		slog.Error("Service not found", "service_name", serviceName)
 		http.Error(w, "service not found", http.StatusNotFound)

@@ -98,6 +98,11 @@ type IPAllower interface {
 	UpdateWhitelist(map[string]bool)
 }
 
+type IRateLimiter interface {
+	GetVisitor(ip string) *feature.Visitor
+	IsEnabled() bool
+}
+
 type HealthCheck struct {
 	Enabled bool   `json:"enabled"`
 	Uri     string `json:"uri"`
@@ -126,11 +131,17 @@ type Service struct {
 	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
 	Auth           Authenticater   `json:"auth"`
 	Cache          Cacher          `json:"cache"`
+	RateLimiter    IRateLimiter    `json:"rateLimiter"`
 	mu             sync.Mutex
 }
 
-func (s *Service) IsAuthEnabled() bool {
-	return s.Auth.IsEnabled()
+func (s *Service) IsRateLimiterEnabled() bool {
+	return s.RateLimiter.IsEnabled()
+}
+
+func (s *Service) RateLimitIP(ip string) bool {
+	v := s.RateLimiter.GetVisitor(ip)
+	return v.Limiter.Allow()
 }
 
 type ServiceRegistry struct {
@@ -236,6 +247,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			CircuitBreaker: feature.NewCircuitBreaker(v.Name, v.CircuitBreaker),
 			Auth:           auth.NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
 			Cache:          feature.NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
+			RateLimiter:    feature.NewServiceRateLimiter(&v.RateLimiter),
 		}
 	}
 }
