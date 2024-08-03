@@ -2,17 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
-	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
-	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
+	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 )
 
 type RegisterBody struct {
@@ -78,24 +78,29 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
-// Authenticater Interface for authenticating requests
-type Authenticater interface {
-	Authenticate(string, *http.Request) auth.AuthError
+// IAuth Interface for authenticating requests
+type IAuth interface {
+	Authenticate(*http.Request) auth.AuthError
 	IsEnabled() bool
 }
 
-// CircuitExecuter Interface for executing circuit breaker
-type CircuitExecuter interface {
+// ICircuitBreaker Interface for executing circuit breaker
+type ICircuitBreaker interface {
 	Execute(string, func() ([]byte, error)) ([]byte, error)
 	IsOpen() bool
 	IsEnabled() bool
 }
 
-// IPAllower Interface for handling IP whitelist
-type IPAllower interface {
+// IWhitelist Interface for handling IP whitelist
+type IWhitelist interface {
 	Allowed(string) bool
 	GetWhitelist() map[string]bool
 	UpdateWhitelist(map[string]bool)
+}
+
+type IRateLimiter interface {
+	GetVisitor(ip string) *feature.Visitor
+	IsEnabled() bool
 }
 
 type HealthCheck struct {
@@ -122,15 +127,41 @@ type Service struct {
 	Addr           string `json:"addr"`
 	FallbackUri    string `json:"fallbackUri"`
 	Health         *HealthCheck
-	IPWhiteList    IPAllower       `json:"ipWhitelist"`
-	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
-	Auth           Authenticater   `json:"auth"`
+	IPWhiteList    IWhitelist      `json:"ipWhitelist"`
+	CircuitBreaker ICircuitBreaker `json:"circuitBreaker"`
+	Auth           IAuth           `json:"auth"`
 	Cache          Cacher          `json:"cache"`
+	RateLimiter    IRateLimiter    `json:"rateLimiter"`
 	mu             sync.Mutex
 }
 
-func (s *Service) IsAuthEnabled() bool {
-	return s.Auth.IsEnabled()
+func (s *Service) IsRateLimiterEnabled() bool {
+	return s.RateLimiter.IsEnabled()
+}
+
+func (s *Service) RateLimitIP(ip string) bool {
+	ip, _, err := net.SplitHostPort(ip)
+	if err != nil {
+		return false
+	}
+	v := s.RateLimiter.GetVisitor(ip)
+	return v.Limiter.Allow()
+}
+
+func (s *Service) IsWhitelisted(addr string) (bool, error) {
+	ip, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false, err
+	}
+	return s.IPWhiteList.Allowed(ip), nil
+}
+
+func (s *Service) GetFallbackUri() string {
+	return s.FallbackUri
+}
+
+func (s *Service) Authenticate(r *http.Request) error {
+	return s.Auth.Authenticate(r)
 }
 
 type ServiceRegistry struct {
@@ -162,7 +193,7 @@ func (sr *ServiceRegistry) Update(name string, updated *Service) {
 
 // Deregister removes a service from the registry
 func (sr *ServiceRegistry) Deregister(name string) {
-	slog.Info("Deregistering service", "name", name)
+	slog.Info("Unregistering service", "name", name)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	delete(sr.Services, name)
@@ -196,27 +227,6 @@ func (sr *ServiceRegistry) GetFallbackUri(name string) string {
 	return s.FallbackUri
 }
 
-// IsWhitelisted checks if the ip is allowed to access the service
-func (sr *ServiceRegistry) IsWhitelisted(name string, addr string) (bool, error) {
-	ip, _, err := net.SplitHostPort(addr)
-	if err != nil {
-		return false, err
-	}
-	s := sr.GetService(name)
-	if s == nil {
-		return false, errors.New("service not found")
-	}
-	return s.IPWhiteList.Allowed(ip), nil
-}
-
-func (sr *ServiceRegistry) Authenticate(name string, r *http.Request) error {
-	s := sr.GetService(name)
-	if s == nil {
-		return errors.New("service not found")
-	}
-	return s.Auth.Authenticate(name, r)
-}
-
 // populateRegistryServices populates the service registry with the services in the configuration
 func populateRegistryServices(sr *ServiceRegistry) {
 	slog.Info("Populating registry services")
@@ -236,6 +246,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 			CircuitBreaker: feature.NewCircuitBreaker(v.Name, v.CircuitBreaker),
 			Auth:           auth.NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
 			Cache:          feature.NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
+			RateLimiter:    feature.NewServiceRateLimiter(&v.RateLimiter),
 		}
 	}
 }
@@ -370,9 +381,9 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// DeregisterService deregisters a service from the registry
+// DeregisterService unregisters a service from the registry
 func (sr *ServiceRegistry) DeregisterService(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Deregistering service", "req", RequestToMap(r))
+	slog.Info("Unregistering service", "req", RequestToMap(r))
 	var db DeregisterBody
 	err := json.NewDecoder(r.Body).Decode(&db)
 	if err != nil {

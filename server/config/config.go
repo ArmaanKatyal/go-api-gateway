@@ -21,6 +21,13 @@ type CircuitSettings struct {
 	FailureRatio float64 `yaml:"failureRatio"`
 }
 
+type RateLimiterSettings struct {
+	Enabled         bool `yaml:"enabled"`
+	Rate            int  `yaml:"rate"`
+	Burst           int  `yaml:"burst"`
+	CleanupInterval int  `yaml:"cleanupInterval"`
+}
+
 func (cs *CircuitSettings) Into(name string) gobreaker.Settings {
 	return gobreaker.Settings{
 		Name:     "cb-" + name,
@@ -54,7 +61,9 @@ type Conf struct {
 		Metrics struct {
 			Prefix  string    `yaml:"prefix"`
 			Buckets []float64 `yaml:"buckets"`
-		} `yaml:"observability"`
+		} `yaml:"metrics"`
+
+		RateLimiter RateLimiterSettings `yaml:"rateLimiter"`
 	}
 
 	Registry struct {
@@ -85,18 +94,9 @@ type Conf struct {
 				ExpirationInterval uint `yaml:"expirationInterval"`
 				CleanupInterval    uint `yaml:"cleanupInterval"`
 			}
-			CircuitBreaker CircuitSettings
+			CircuitBreaker CircuitSettings     `yaml:"circuitBreaker"`
+			RateLimiter    RateLimiterSettings `yaml:"rateLimiter"`
 		}
-	}
-
-	RateLimiter struct {
-		Enabled bool `yaml:"enabled"`
-		// Maximum number of requests per minute
-		MaxRequests int `yaml:"maxRequests"`
-		// Interval (mins) at which the rate limiter will clean up old visitors
-		CleanupInterval int `yaml:"cleanupInterval"`
-		// Interval (secs) between events to rate limit
-		EventInterval uint `yaml:"eventInterval"`
 	}
 }
 
@@ -122,12 +122,6 @@ func (c *Conf) Verify() bool {
 	}
 	if c.Registry.HeartbeatInterval == 0 {
 		c.Registry.HeartbeatInterval = 30
-	}
-	if c.RateLimiter.MaxRequests == 0 {
-		c.RateLimiter.MaxRequests = 100
-	}
-	if c.RateLimiter.CleanupInterval == 0 {
-		c.RateLimiter.CleanupInterval = 2
 	}
 	return true
 }

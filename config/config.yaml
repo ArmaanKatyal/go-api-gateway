@@ -11,6 +11,11 @@ server:
   metrics:
     prefix: "gateway"
     buckets: [0.005, 0.01, 0.025, 0.05, 0.1]
+  rateLimiter:
+    enabled: true
+    rate: 100
+    burst: 100
+    cleanupInterval: 3600
 registry:
   heartbeatInterval: 15
   services:
@@ -32,13 +37,13 @@ registry:
         enabled: true
         expirationInterval: 5
         cleanupInterval: 10
-      circuitbreaker:
+      circuitBreaker:
         enabled: true
         timeout: 5
         interval: 0
         failureRatio: 0.5
-ratelimiter:
-  enabled: true
-  maxRequests: 500
-  cleanupInterval: 1
-  eventInterval: 60
+      rateLimiter:
+        enabled: true
+        rate: 10
+        burst: 10
+        cleanupInterval: 3600

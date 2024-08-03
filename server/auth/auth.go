@@ -40,15 +40,15 @@ func (j *JwtAuth) getSecret() []byte {
 }
 
 // Authenticate checks if the request has a valid JWT token in the header
-func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
+func (j *JwtAuth) Authenticate(r *http.Request) AuthError {
 	token := r.Header.Get("Authorization")
 	path := "/" + strings.Split(r.URL.Path, "/")[2]
-	slog.Info("Authenticating request", "service", name, "path", path)
+	slog.Info("Authenticating request", "path", path)
 	exists := j.pathInRoutes(path)
 	if exists && j.IsEnabled() {
 		if token == "" {
 			if j.Anonymous {
-				slog.Warn("Anonymous request", "service", name, "path", path)
+				slog.Warn("Anonymous request", "path", path)
 				return nil
 			}
 			return ErrTokenMissing
@@ -60,22 +60,22 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 		})
 		if err != nil {
 			if j.Anonymous {
-				slog.Warn("Anonymous request", "service", name, "path", path)
+				slog.Warn("Anonymous request", "path", path)
 				return nil
 			}
-			slog.Error("Error parsing token", "error", err.Error(), "service", name, "path", path)
+			slog.Error("Error parsing token", "error", err.Error(), "path", path)
 			return ErrInvalidToken
 		}
 		if !parsed.Valid {
-			slog.Error("Invalid token", "service", name, "path", path)
+			slog.Error("Invalid token", "path", path)
 			return ErrInvalidToken
 		}
 
 		// Check expiration
 		if claims.ExpiresAt.Unix() < time.Now().Unix() {
-			slog.Error("Token expired", "service", name, "path", path)
+			slog.Error("Token expired", "path", path)
 			if j.Anonymous {
-				slog.Warn("Anonymous request", "service", name, "path", path)
+				slog.Warn("Anonymous request", "path", path)
 				return nil
 			}
 			return ErrInvalidToken
@@ -83,7 +83,7 @@ func (j *JwtAuth) Authenticate(name string, r *http.Request) AuthError {
 
 		c, err := json.Marshal(claims)
 		if err != nil {
-			slog.Error("Error marshalling claims", "error", err.Error(), "service", name, "path", path)
+			slog.Error("Error marshalling claims", "error", err.Error(), "path", path)
 			return err
 		}
 
