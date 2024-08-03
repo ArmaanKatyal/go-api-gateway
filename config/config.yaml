@@ -44,6 +44,6 @@ registry:
         failureRatio: 0.5
       rateLimiter:
         enabled: true
-        rate: 1
-        burst: 5
+        rate: 10
+        burst: 10
         cleanupInterval: 3600
