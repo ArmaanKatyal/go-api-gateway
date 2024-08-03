@@ -78,21 +78,21 @@ type DeregisterResponse struct {
 	Message string `json:"message"`
 }
 
-// Authenticater Interface for authenticating requests
-type Authenticater interface {
+// IAuth Interface for authenticating requests
+type IAuth interface {
 	Authenticate(*http.Request) auth.AuthError
 	IsEnabled() bool
 }
 
-// CircuitExecuter Interface for executing circuit breaker
-type CircuitExecuter interface {
+// ICircuitBreaker Interface for executing circuit breaker
+type ICircuitBreaker interface {
 	Execute(string, func() ([]byte, error)) ([]byte, error)
 	IsOpen() bool
 	IsEnabled() bool
 }
 
-// IPAllower Interface for handling IP whitelist
-type IPAllower interface {
+// IWhitelist Interface for handling IP whitelist
+type IWhitelist interface {
 	Allowed(string) bool
 	GetWhitelist() map[string]bool
 	UpdateWhitelist(map[string]bool)
@@ -127,9 +127,9 @@ type Service struct {
 	Addr           string `json:"addr"`
 	FallbackUri    string `json:"fallbackUri"`
 	Health         *HealthCheck
-	IPWhiteList    IPAllower       `json:"ipWhitelist"`
-	CircuitBreaker CircuitExecuter `json:"circuitBreaker"`
-	Auth           Authenticater   `json:"auth"`
+	IPWhiteList    IWhitelist      `json:"ipWhitelist"`
+	CircuitBreaker ICircuitBreaker `json:"circuitBreaker"`
+	Auth           IAuth           `json:"auth"`
 	Cache          Cacher          `json:"cache"`
 	RateLimiter    IRateLimiter    `json:"rateLimiter"`
 	mu             sync.Mutex
@@ -193,7 +193,7 @@ func (sr *ServiceRegistry) Update(name string, updated *Service) {
 
 // Deregister removes a service from the registry
 func (sr *ServiceRegistry) Deregister(name string) {
-	slog.Info("Deregistering service", "name", name)
+	slog.Info("Unregistering service", "name", name)
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	delete(sr.Services, name)
@@ -381,9 +381,9 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// DeregisterService deregisters a service from the registry
+// DeregisterService unregisters a service from the registry
 func (sr *ServiceRegistry) DeregisterService(w http.ResponseWriter, r *http.Request) {
-	slog.Info("Deregistering service", "req", RequestToMap(r))
+	slog.Info("Unregistering service", "req", RequestToMap(r))
 	var db DeregisterBody
 	err := json.NewDecoder(r.Body).Decode(&db)
 	if err != nil {

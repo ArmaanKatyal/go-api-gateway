@@ -214,16 +214,16 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Create a new uri based on the resolved request
-	forward_uri := rh.createForwardURI(service.Addr, route, r.URL.RawQuery)
+	forwardUri := rh.createForwardURI(service.Addr, route, r.URL.RawQuery)
 
-	slog.Info("Forwarding request", "forward_uri", forward_uri, "service_name", serviceName)
+	slog.Info("Forwarding request", "forward_uri", forwardUri, "service_name", serviceName)
 
 	var err error
 	// Forward the request with or without circuit breaker
 	if rh.circuitBreakerEnabled(serviceName) {
-		err = rh.forwardRequestCB(w, r, forward_uri, service.CircuitBreaker, serviceName, start)
+		err = rh.forwardRequestCB(w, r, forwardUri, service.CircuitBreaker, serviceName, start)
 	} else {
-		err = rh.forwardRequest(w, r, forward_uri, serviceName, start)
+		err = rh.forwardRequest(w, r, forwardUri, serviceName, start)
 	}
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", serviceName)
@@ -240,8 +240,8 @@ func (rh *RequestHandler) generateCacheKey(service string, r *http.Request) stri
 }
 
 // forwardRequest forwards the request to the resolved service
-func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forward_uri string, service string, t time.Time) error {
-	req, err := http.NewRequest(r.Method, forward_uri, r.Body)
+func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request, forwardUri string, service string, t time.Time) error {
+	req, err := http.NewRequest(r.Method, forwardUri, r.Body)
 	if err != nil {
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, t)
 		return err
@@ -277,7 +277,7 @@ func (rh *RequestHandler) forwardRequest(w http.ResponseWriter, r *http.Request,
 		slog.Error("error setting value in cache", "service", service, "path", r.URL.String(), "key", key)
 		return errors.New("SetCache failed")
 	}
-	slog.Info("SetCache succesfull", "service", service, "path", r.URL.String(), "key", key)
+	slog.Info("SetCache successful", "service", service, "path", r.URL.String(), "key", key)
 
 	rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(resp.StatusCode), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
@@ -300,7 +300,7 @@ func copyResponseHeaders(w http.ResponseWriter, resp *http.Response) {
 }
 
 // forwardRequestCB forwards the request to the resolved service with circuit breaker
-func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Request, forwardURI string, cb CircuitExecuter, service string, t time.Time) error {
+func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Request, forwardURI string, cb ICircuitBreaker, service string, t time.Time) error {
 	// Define the request execution function
 	executeRequest := func() ([]byte, error) {
 		// Create a new request
@@ -357,7 +357,7 @@ func (rh *RequestHandler) forwardRequestCB(w http.ResponseWriter, r *http.Reques
 		slog.Error("error setting value in cache", "service", service, "path", r.URL.String(), "key", key)
 		return errors.New("SetCache failed")
 	}
-	slog.Info("SetCache succesfull cb", "service", service, "path", r.URL.String(), "key", key)
+	slog.Info("SetCache successful cb", "service", service, "path", r.URL.String(), "key", key)
 
 	rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusOK), Method: r.Method, Route: r.URL.String()}, t)
 	return nil
