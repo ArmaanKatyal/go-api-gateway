@@ -4,59 +4,54 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"github.com/patrickmn/go-cache"
 	"github.com/stretchr/testify/assert"
 )
 
-type params struct {
-	enabled            bool
-	expirationInterval uint
-	cleanupInterval    uint
-}
-
 func TestCacheHandler(t *testing.T) {
 	tests := []struct {
 		name     string
-		given    params
-		expected params
+		given    config.CacheSettings
+		expected config.CacheSettings
 	}{
 		{
 			name:     "default values",
-			given:    params{enabled: false, expirationInterval: 0, cleanupInterval: 0},
-			expected: params{enabled: false, expirationInterval: 5, cleanupInterval: 10},
+			given:    config.CacheSettings{Enabled: false, ExpirationInterval: 0, CleanupInterval: 0},
+			expected: config.CacheSettings{Enabled: false, ExpirationInterval: 5, CleanupInterval: 10},
 		},
 		{
 			name:     "custom values",
-			given:    params{enabled: true, expirationInterval: 10, cleanupInterval: 20},
-			expected: params{enabled: true, expirationInterval: 10, cleanupInterval: 20},
+			given:    config.CacheSettings{Enabled: true, ExpirationInterval: 10, CleanupInterval: 20},
+			expected: config.CacheSettings{Enabled: true, ExpirationInterval: 10, CleanupInterval: 20},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cacheHandler := NewCacheHandler(tt.given.enabled, tt.given.expirationInterval, tt.given.cleanupInterval)
-			assert.Equal(t, tt.expected.enabled, cacheHandler.Enabled)
-			assert.Equal(t, tt.expected.expirationInterval, cacheHandler.ExpirationInterval)
-			assert.Equal(t, tt.expected.cleanupInterval, cacheHandler.CleanupInterval)
+			cacheHandler := NewCacheHandler(&tt.given)
+			assert.Equal(t, tt.expected.Enabled, cacheHandler.Enabled)
+			assert.Equal(t, tt.expected.ExpirationInterval, cacheHandler.ExpirationInterval)
+			assert.Equal(t, tt.expected.CleanupInterval, cacheHandler.CleanupInterval)
 		})
 	}
 }
 
 func TestCacheGet(t *testing.T) {
 	t.Run("success get value", func(t *testing.T) {
-		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
 		cacheHandler.Set("test", "value")
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
 	})
 	t.Run("fail get value", func(t *testing.T) {
-		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
 		value, found := cacheHandler.Get("test")
 		assert.False(t, found)
 		assert.Nil(t, value)
 	})
 	t.Run("override value", func(t *testing.T) {
-		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
 		cacheHandler.Set("test", "value")
 		cacheHandler.Set("test", "new value")
 		value, found := cacheHandler.Get("test")
@@ -80,14 +75,14 @@ func TestCacheGet(t *testing.T) {
 
 func TestCacheSet(t *testing.T) {
 	t.Run("success set value", func(t *testing.T) {
-		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
 		cacheHandler.Set("test", "value")
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
 	})
 	t.Run("override value", func(t *testing.T) {
-		cacheHandler := NewCacheHandler(true, 5, 10)
+		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
 		cacheHandler.Set("test", "value")
 		cacheHandler.Set("test", "new value")
 		value, found := cacheHandler.Get("test")
