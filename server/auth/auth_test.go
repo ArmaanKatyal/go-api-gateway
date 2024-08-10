@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +25,8 @@ func TestAuthNewJwtAuth(t *testing.T) {
 	t.Run("valid file input", func(t *testing.T) {
 		input := "test_secret_data"
 		reader := bytes.NewReader([]byte(input))
-		jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+		jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+			Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 		assert.True(t, jwtAuth.Enabled)
 		assert.False(t, jwtAuth.Anonymous)
 		assert.Len(t, jwtAuth.Routes, 2)
@@ -32,7 +34,8 @@ func TestAuthNewJwtAuth(t *testing.T) {
 	})
 	t.Run("invalid file input", func(t *testing.T) {
 		reader := failingReader{}
-		jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+		jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+			Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 		assert.True(t, jwtAuth.Enabled)
 		assert.False(t, jwtAuth.Anonymous)
 		assert.Len(t, jwtAuth.Routes, 2)
@@ -44,13 +47,15 @@ func TestAuthPathInRoutes(t *testing.T) {
 	t.Run("path in routes", func(t *testing.T) {
 		input := "test_secret_data"
 		reader := bytes.NewReader([]byte(input))
-		jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+		jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+			Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 		assert.True(t, jwtAuth.pathInRoutes("route1"))
 	})
 	t.Run("path not in routes", func(t *testing.T) {
 		input := "test_secret_data"
 		reader := bytes.NewReader([]byte(input))
-		jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+		jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+			Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 		assert.False(t, jwtAuth.pathInRoutes("route3"))
 	})
 }
@@ -58,14 +63,16 @@ func TestAuthPathInRoutes(t *testing.T) {
 func TestAuthIsEnabled(t *testing.T) {
 	input := "test_secret_data"
 	reader := bytes.NewReader([]byte(input))
-	jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+	jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+		Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 	assert.True(t, jwtAuth.IsEnabled())
 }
 
 func TestAuthGetSecret(t *testing.T) {
 	input := "test_secret_data"
 	reader := bytes.NewReader([]byte(input))
-	jwtAuth := NewJwtAuth(true, false, []string{"route1", "route2"}, reader)
+	jwtAuth := NewJwtAuth(&config.AuthSettings{Enabled: true, Anonymous: false,
+		Routes: []string{"route1", "route2"}, Secret: "/path"}, reader)
 	assert.Equal(t, []byte(input), jwtAuth.getSecret())
 }
 
@@ -90,28 +97,46 @@ func generateToken(key string, exp int64) (string, error) {
 }
 
 func TestAuthAuthenticate(t *testing.T) {
+
+	defJwtAuth := func() *config.AuthSettings {
+		return &config.AuthSettings{
+			Enabled:   true,
+			Anonymous: false,
+			Routes:    []string{"/route1"},
+			Secret:    "/test/path",
+		}
+	}
+
 	t.Run("path not in routes", func(t *testing.T) {
-		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(defJwtAuth(), bytes.NewReader([]byte("test")))
 		err := j.Authenticate(generateRequest("test", "/test/route2"))
 		assert.Nil(t, err)
 	})
 	t.Run("auth disabled", func(t *testing.T) {
-		j := NewJwtAuth(false, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(&config.AuthSettings{
+			Enabled:   false,
+			Anonymous: false,
+			Routes:    []string{"/route1"},
+		}, bytes.NewReader([]byte("test")))
 		err := j.Authenticate(generateRequest("test", "/test/route1"))
 		assert.Nil(t, err)
 	})
 	t.Run("token missing", func(t *testing.T) {
-		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(defJwtAuth(), bytes.NewReader([]byte("test")))
 		err := j.Authenticate(generateRequest("", "/test/route1"))
 		assert.Equal(t, ErrTokenMissing, err)
 	})
 	t.Run("token missing anonymous enabled", func(t *testing.T) {
-		j := NewJwtAuth(true, true, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(&config.AuthSettings{
+			Enabled:   true,
+			Anonymous: true,
+			Routes:    []string{"/route1"},
+		}, bytes.NewReader([]byte("test")))
 		err := j.Authenticate(generateRequest("", "/test/route1"))
 		assert.Nil(t, err)
 	})
 	t.Run("invalid token", func(t *testing.T) {
-		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(defJwtAuth(), bytes.NewReader([]byte("test")))
 		token, err := generateToken("test", 0)
 		assert.Nil(t, err)
 		err = j.Authenticate(generateRequest(token, "/test/route1"))
@@ -122,7 +147,7 @@ func TestAuthAuthenticate(t *testing.T) {
 		token, err := generateToken("test", exp)
 		req := generateRequest(token, "/test/route1")
 		assert.Nil(t, err)
-		j := NewJwtAuth(true, false, []string{"/route1"}, bytes.NewReader([]byte("test")))
+		j := NewJwtAuth(defJwtAuth(), bytes.NewReader([]byte("test")))
 		err = j.Authenticate(req)
 		assert.Nil(t, err)
 		claims := map[string]interface{}{

@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -114,16 +113,13 @@ func NewJwtAuth(conf *config.AuthSettings, reader io.Reader) *JwtAuth {
 		Anonymous: conf.Anonymous,
 		Routes:    conf.Routes,
 	}
-	if f, ok := reader.(*os.File); ok && f != nil {
-		data, err := io.ReadAll(reader)
-		if err != nil {
-			slog.Debug("Error reading secret file", "error", err.Error())
-			data = []byte(DefaultSecret)
-		}
-		ja.secret = data
-		return ja
+
+	// Read from the provided reader, regardless of the type
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		slog.Error("Error reading secret or empty secret file", "error", err)
+		data = []byte(DefaultSecret)
 	}
-	slog.Warn("No secret file provided, using default secret")
-	ja.secret = []byte(DefaultSecret)
+	ja.secret = data
 	return ja
 }

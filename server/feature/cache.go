@@ -1,8 +1,9 @@
 package feature
 
 import (
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"time"
+
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 
 	"github.com/patrickmn/go-cache"
 )
@@ -16,20 +17,18 @@ type CacheHandler struct {
 
 func NewCacheHandler(conf *config.CacheSettings) *CacheHandler {
 	// If 0, set to default values
-	var expInt uint
-	var cleanupInt uint
 	if conf.ExpirationInterval == 0 {
-		expInt = 5
+		conf.ExpirationInterval = 5
 	}
 	if conf.CleanupInterval == 0 {
-		cleanupInt = 10
+		conf.CleanupInterval = 10
 	}
 	return &CacheHandler{
 		Enabled:            conf.Enabled,
-		ExpirationInterval: expInt,
-		CleanupInterval:    cleanupInt,
-		cache: cache.New(time.Duration(expInt)*time.Minute,
-			time.Duration(cleanupInt)*time.Minute),
+		ExpirationInterval: conf.ExpirationInterval,
+		CleanupInterval:    conf.CleanupInterval,
+		cache: cache.New(time.Duration(conf.ExpirationInterval)*time.Minute,
+			time.Duration(conf.CleanupInterval)*time.Minute),
 	}
 }
 
