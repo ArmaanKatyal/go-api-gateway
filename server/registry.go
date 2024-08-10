@@ -73,10 +73,10 @@ func (h *HealthCheck) GetUri() string {
 	return h.Uri
 }
 
-func NewHealthCheck(enabled bool, uri string) *HealthCheck {
+func NewHealthCheck(conf *config.HealthCheckSettings) *HealthCheck {
 	return &HealthCheck{
-		Enabled: enabled,
-		Uri:     uri,
+		Enabled: conf.Enabled,
+		Uri:     conf.Uri,
 	}
 }
 
@@ -198,7 +198,7 @@ func populateRegistryServices(sr *ServiceRegistry) {
 		sr.Services[v.Name] = &Service{
 			Addr:           v.Addr,
 			FallbackUri:    v.FallbackUri,
-			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
+			Health:         NewHealthCheck(&v.Health),
 			IPWhiteList:    w,
 			CircuitBreaker: feature.NewCircuitBreaker(v.Name, v.CircuitBreaker),
 			Auth:           auth.NewJwtAuth(&v.Auth, file),
