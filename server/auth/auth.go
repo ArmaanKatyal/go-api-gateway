@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -106,25 +107,19 @@ func (j *JwtAuth) IsEnabled() bool {
 	return j.Enabled
 }
 
-func NewJwtAuth(enabled bool, anonymous bool, routes []string, reader io.Reader) *JwtAuth {
-	if reader != nil {
-		data, err := io.ReadAll(reader)
-		if err != nil {
-			slog.Debug("Error reading secret file", "error", err.Error())
-			data = []byte(DefaultSecret)
-		}
-		return &JwtAuth{
-			Enabled:   enabled,
-			Anonymous: anonymous,
-			Routes:    routes,
-			secret:    data,
-		}
+func NewJwtAuth(conf *config.AuthSettings, reader io.Reader) *JwtAuth {
+	ja := &JwtAuth{
+		Enabled:   conf.Enabled,
+		Anonymous: conf.Anonymous,
+		Routes:    conf.Routes,
 	}
-	slog.Warn("No secret file provided, using default secret")
-	return &JwtAuth{
-		Enabled:   enabled,
-		Anonymous: anonymous,
-		Routes:    routes,
-		secret:    []byte(DefaultSecret),
+
+	// Read from the provided reader, regardless of the type
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		slog.Error("Error reading secret or empty secret file", "error", err)
+		data = []byte(DefaultSecret)
 	}
+	ja.secret = data
+	return ja
 }

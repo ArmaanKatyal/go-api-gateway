@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"github.com/go-playground/validator/v10"
 	"github.com/sony/gobreaker/v2"
 	"log/slog"
 	"os"
@@ -13,19 +14,17 @@ import (
 
 // AppConfig is the global configuration object
 var AppConfig Conf
+var Validate *validator.Validate
+
+func init() {
+	Validate = validator.New(validator.WithRequiredStructEnabled())
+}
 
 type CircuitSettings struct {
 	Enabled      bool    `yaml:"enabled"`
 	Timeout      uint    `yaml:"timeout"`
 	Interval     uint    `yaml:"interval"`
 	FailureRatio float64 `yaml:"failureRatio"`
-}
-
-type RateLimiterSettings struct {
-	Enabled         bool `yaml:"enabled"`
-	Rate            int  `yaml:"rate"`
-	Burst           int  `yaml:"burst"`
-	CleanupInterval int  `yaml:"cleanupInterval"`
 }
 
 func (cs *CircuitSettings) Into(name string) gobreaker.Settings {
@@ -38,6 +37,48 @@ func (cs *CircuitSettings) Into(name string) gobreaker.Settings {
 			return failureRatio >= cs.FailureRatio
 		},
 	}
+}
+
+type RateLimiterSettings struct {
+	Enabled         bool `yaml:"enabled"`
+	Rate            int  `yaml:"rate"`
+	Burst           int  `yaml:"burst"`
+	CleanupInterval int  `yaml:"cleanupInterval"`
+}
+
+type CacheSettings struct {
+	Enabled            bool `yaml:"enabled"`
+	ExpirationInterval uint `yaml:"expirationInterval"`
+	CleanupInterval    uint `yaml:"cleanupInterval"`
+}
+
+type AuthSettings struct {
+	Enabled bool `yaml:"enabled"`
+	// Give the option to make requests with no/expired token to pas through
+	Anonymous bool `yaml:"anonymous"`
+	// path to the secret file
+	Secret string `yaml:"secret"`
+	// list of routes that require authentication
+	Routes []string `yaml:"routes"`
+}
+
+type HealthCheckSettings struct {
+	Enabled bool `yaml:"enabled"`
+	// path to the health check endpoint
+	Uri string `yaml:"uri"`
+}
+
+type ServiceConf struct {
+	Name      string   `yaml:"name" validate:"required"`
+	Addr      string   `yaml:"addr" validate:"required"`
+	WhiteList []string `yaml:"whitelist" validate:"required"`
+	// uri to redirect to if the service is down
+	FallbackUri    string              `yaml:"fallbackUri"`
+	Health         HealthCheckSettings `yaml:"health" validate:"required"`
+	Auth           AuthSettings        `yaml:"auth"`
+	Cache          CacheSettings       `yaml:"cache"`
+	CircuitBreaker CircuitSettings     `yaml:"circuitBreaker"`
+	RateLimiter    RateLimiterSettings `yaml:"rateLimiter"`
 }
 
 type Conf struct {
@@ -69,34 +110,7 @@ type Conf struct {
 	Registry struct {
 		// Interval (secs) at which the service will send a heartbeat to all registered services
 		HeartbeatInterval int `yaml:"heartbeatInterval"`
-		Services          []struct {
-			Name      string   `yaml:"name"`
-			Addr      string   `yaml:"addr"`
-			WhiteList []string `yaml:"whitelist"`
-			// uri to redirect to if the service is down
-			FallbackUri string `yaml:"fallbackUri"`
-			Health      struct {
-				Enabled bool `yaml:"enabled"`
-				// path to the health check endpoint
-				Uri string `yaml:"uri"`
-			}
-			Auth struct {
-				Enabled bool `yaml:"enabled"`
-				// Give the option to make requets with no/expired token to pas through
-				Anonymous bool `yaml:"anonymous"`
-				// path to the secret file
-				Secret string `yaml:"secret"`
-				// list of routes that require authentication
-				Routes []string `yaml:"routes"`
-			}
-			Cache struct {
-				Enabled            bool `yaml:"enabled"`
-				ExpirationInterval uint `yaml:"expirationInterval"`
-				CleanupInterval    uint `yaml:"cleanupInterval"`
-			}
-			CircuitBreaker CircuitSettings     `yaml:"circuitBreaker"`
-			RateLimiter    RateLimiterSettings `yaml:"rateLimiter"`
-		}
+		Services          []ServiceConf
 	}
 }
 

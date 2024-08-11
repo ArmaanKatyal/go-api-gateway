@@ -3,6 +3,8 @@ package feature
 import (
 	"time"
 
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+
 	"github.com/patrickmn/go-cache"
 )
 
@@ -13,20 +15,20 @@ type CacheHandler struct {
 	cache              *cache.Cache
 }
 
-func NewCacheHandler(enabled bool, expirationInterval uint, cleanupInterval uint) *CacheHandler {
+func NewCacheHandler(conf *config.CacheSettings) *CacheHandler {
 	// If 0, set to default values
-	if expirationInterval == 0 {
-		expirationInterval = 5
+	if conf.ExpirationInterval == 0 {
+		conf.ExpirationInterval = 5
 	}
-	if cleanupInterval == 0 {
-		cleanupInterval = 10
+	if conf.CleanupInterval == 0 {
+		conf.CleanupInterval = 10
 	}
 	return &CacheHandler{
-		Enabled:            enabled,
-		ExpirationInterval: expirationInterval,
-		CleanupInterval:    cleanupInterval,
-		cache: cache.New(time.Duration(expirationInterval)*time.Minute,
-			time.Duration(cleanupInterval)*time.Minute),
+		Enabled:            conf.Enabled,
+		ExpirationInterval: conf.ExpirationInterval,
+		CleanupInterval:    conf.CleanupInterval,
+		cache: cache.New(time.Duration(conf.ExpirationInterval)*time.Minute,
+			time.Duration(conf.CleanupInterval)*time.Minute),
 	}
 }
 

@@ -15,52 +15,9 @@ import (
 	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
 )
 
-type RegisterBody struct {
-	// Note: try to keep it consistent with the config.registry.services struct
-	Name        string   `json:"name"`
-	Address     string   `json:"addr"`
-	WhiteList   []string `json:"whitelist"`
-	FallbackUri string   `json:"fallbackUri,omitempty"`
-	Health      struct {
-		Enabled bool   `json:"enabled"`
-		Uri     string `json:"uri"`
-	}
-	Auth *struct {
-		Enabled   bool     `json:"enabled"`
-		Anonymous bool     `json:"anonymous"`
-		Secret    string   `json:"secret"`
-		Routes    []string `json:"routes"`
-	} `json:"auth,omitempty"`
-	Cache *struct {
-		Enabled            bool `json:"enabled"`
-		ExpirationInterval uint `json:"expirationInterval"`
-		CleanupInterval    uint `json:"cleanupInterval"`
-	} `json:"cache,omitempty"`
-	CircuitBreaker config.CircuitSettings
-}
+type RegisterBody config.ServiceConf
 
-type UpdateBody struct {
-	// Note: try to keep it consistent with RegisterBody
-	Name        string   `json:"name"`
-	Address     string   `json:"addr"`
-	WhiteList   []string `json:"whitelist"`
-	FallbackUri string   `json:"fallbackUri,omitempty"`
-	Health      struct {
-		Enabled bool   `json:"enabled"`
-		Uri     string `json:"uri"`
-	}
-	Auth *struct {
-		Enabled   bool     `json:"enabled"`
-		Anonymous bool     `json:"anonymous"`
-		Secret    string   `json:"secret"`
-		Routes    []string `json:"routes"`
-	} `json:"auth,omitempty"`
-	Cache *struct {
-		Enabled            bool `json:"enabled"`
-		ExpirationInterval uint `json:"expirationInterval"`
-		CleanupInterval    uint `json:"cleanupInterval"`
-	} `json:"cache,omitempty"`
-}
+type UpdateBody config.ServiceConf
 
 type RegisterResponse struct {
 	Message string `json:"message"`
@@ -116,17 +73,17 @@ func (h *HealthCheck) GetUri() string {
 	return h.Uri
 }
 
-func NewHealthCheck(enabled bool, uri string) *HealthCheck {
-	return &HealthCheck{
-		Enabled: enabled,
-		Uri:     uri,
+func NewHealthCheck(conf *config.HealthCheckSettings) HealthCheck {
+	return HealthCheck{
+		Enabled: conf.Enabled,
+		Uri:     conf.Uri,
 	}
 }
 
 type Service struct {
-	Addr           string `json:"addr"`
-	FallbackUri    string `json:"fallbackUri"`
-	Health         *HealthCheck
+	Addr           string          `json:"addr"`
+	FallbackUri    string          `json:"fallbackUri"`
+	Health         HealthCheck     `json:"health"`
 	IPWhiteList    IWhitelist      `json:"ipWhitelist"`
 	CircuitBreaker ICircuitBreaker `json:"circuitBreaker"`
 	Auth           IAuth           `json:"auth"`
@@ -241,11 +198,11 @@ func populateRegistryServices(sr *ServiceRegistry) {
 		sr.Services[v.Name] = &Service{
 			Addr:           v.Addr,
 			FallbackUri:    v.FallbackUri,
-			Health:         NewHealthCheck(v.Health.Enabled, v.Health.Uri),
+			Health:         NewHealthCheck(&v.Health),
 			IPWhiteList:    w,
 			CircuitBreaker: feature.NewCircuitBreaker(v.Name, v.CircuitBreaker),
-			Auth:           auth.NewJwtAuth(v.Auth.Enabled, v.Auth.Anonymous, v.Auth.Routes, file),
-			Cache:          feature.NewCacheHandler(v.Cache.Enabled, v.Cache.ExpirationInterval, v.Cache.CleanupInterval),
+			Auth:           auth.NewJwtAuth(&v.Auth, file),
+			Cache:          feature.NewCacheHandler(&v.Cache),
 			RateLimiter:    feature.NewServiceRateLimiter(&v.RateLimiter),
 		}
 	}
@@ -271,29 +228,33 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// TODO: do a schema validation before actually adding the service. duh ¯\_(ツ)_/¯
+	err = config.Validate.Struct(rb)
+	if err != nil {
+		slog.Error("Error validating body", "error", err.Error())
+		http.Error(w, "Error validating request body", http.StatusBadRequest)
+		return
+	}
 
 	wl := feature.NewIPWhiteList()
 	feature.PopulateIPWhiteList(wl, rb.WhiteList)
 
 	var na *auth.JwtAuth
-	if rb.Auth != nil {
-		file, err := os.Open(rb.Auth.Secret)
-		if err != nil {
-			slog.Error("failed to read service secret", "service", rb.Name, "path", rb.Auth.Secret)
-		}
-		na = auth.NewJwtAuth(rb.Auth.Enabled, rb.Auth.Anonymous, rb.Auth.Routes, file)
-	} else {
-		na = auth.NewJwtAuth(false, false, []string{}, nil)
+	file, err := os.Open(rb.Auth.Secret)
+	if err != nil {
+		slog.Error("failed to open secret file", "service", rb.Name, "path", rb.Auth.Secret)
 	}
+	na = auth.NewJwtAuth(&rb.Auth, file)
 
 	sr.Register(rb.Name, &Service{
-		Addr:           rb.Address,
+		Addr:           rb.Addr,
 		FallbackUri:    rb.FallbackUri,
 		IPWhiteList:    wl,
 		CircuitBreaker: feature.NewCircuitBreaker(rb.Name, rb.CircuitBreaker),
 		Auth:           na,
-		Cache:          feature.NewCacheHandler(rb.Cache.Enabled, rb.Cache.ExpirationInterval, rb.Cache.CleanupInterval),
+		Cache:          feature.NewCacheHandler(&rb.Cache),
+		Health:         NewHealthCheck(&rb.Health),
+		RateLimiter:    feature.NewServiceRateLimiter(&rb.RateLimiter),
+		mu:             sync.Mutex{},
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -320,7 +281,12 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// TODO: do a schema validation before actually changing something. duh ¯\_(ツ)_/¯
+	err = config.Validate.Struct(ub)
+	if err != nil {
+		slog.Error("Error validating update request body", "error", err.Error())
+		http.Error(w, "Error validating request body", http.StatusBadRequest)
+		return
+	}
 
 	s := sr.GetService(ub.Name)
 	if s == nil {
@@ -333,7 +299,7 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 	defer s.mu.Unlock()
 
 	// modify the address
-	s.Addr = ub.Address
+	s.Addr = ub.Addr
 	// add the new whitelisted ip
 	existingLists := s.IPWhiteList.GetWhitelist()
 	for _, v := range ub.WhiteList {
@@ -344,25 +310,19 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 
 	// Update auth
 	var na *auth.JwtAuth
-	if ub.Auth != nil {
+	if ub.Auth.Secret != "" {
 		file, err := os.Open(ub.Auth.Secret)
 		if err != nil {
-			slog.Error("failed to read service secret", "service", ub.Name, "path", ub.Auth.Secret)
+			slog.Error("failed to open secret file", "service", ub.Name, "path", ub.Auth.Secret)
 		}
-		na = auth.NewJwtAuth(ub.Auth.Enabled, ub.Auth.Anonymous, ub.Auth.Routes, file)
+		na = auth.NewJwtAuth(&ub.Auth, file)
 	} else {
-		na = auth.NewJwtAuth(false, false, []string{}, nil)
+		na = auth.NewJwtAuth(&ub.Auth, nil)
 	}
 	s.Auth = na
 
 	// Update cache
-	var ch *feature.CacheHandler
-	if ub.Cache != nil {
-		ch = feature.NewCacheHandler(ub.Cache.Enabled, ub.Cache.ExpirationInterval, ub.Cache.CleanupInterval)
-	} else {
-		ch = feature.NewCacheHandler(false, 0, 0)
-	}
-	s.Cache = ch
+	s.Cache = feature.NewCacheHandler(&ub.Cache)
 
 	// Update the service in the registry
 	sr.Update(ub.Name, s)
