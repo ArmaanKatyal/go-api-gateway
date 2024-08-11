@@ -73,17 +73,17 @@ func (h *HealthCheck) GetUri() string {
 	return h.Uri
 }
 
-func NewHealthCheck(conf *config.HealthCheckSettings) *HealthCheck {
-	return &HealthCheck{
+func NewHealthCheck(conf *config.HealthCheckSettings) HealthCheck {
+	return HealthCheck{
 		Enabled: conf.Enabled,
 		Uri:     conf.Uri,
 	}
 }
 
 type Service struct {
-	Addr           string `json:"addr"`
-	FallbackUri    string `json:"fallbackUri"`
-	Health         *HealthCheck
+	Addr           string          `json:"addr"`
+	FallbackUri    string          `json:"fallbackUri"`
+	Health         HealthCheck     `json:"health"`
 	IPWhiteList    IWhitelist      `json:"ipWhitelist"`
 	CircuitBreaker ICircuitBreaker `json:"circuitBreaker"`
 	Auth           IAuth           `json:"auth"`
@@ -228,21 +228,22 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// TODO: do a schema validation before actually adding the service. duh ¯\_(ツ)_/¯
+	err = config.Validate.Struct(rb)
+	if err != nil {
+		slog.Error("Error validating body", "error", err.Error())
+		http.Error(w, "Error validating request body", http.StatusBadRequest)
+		return
+	}
 
 	wl := feature.NewIPWhiteList()
 	feature.PopulateIPWhiteList(wl, rb.WhiteList)
 
 	var na *auth.JwtAuth
-	if rb.Auth.Secret != "" {
-		file, err := os.Open(rb.Auth.Secret)
-		if err != nil {
-			slog.Error("failed to open secret file", "service", rb.Name, "path", rb.Auth.Secret)
-		}
-		na = auth.NewJwtAuth(&rb.Auth, file)
-	} else {
-		na = auth.NewJwtAuth(&rb.Auth, nil)
+	file, err := os.Open(rb.Auth.Secret)
+	if err != nil {
+		slog.Error("failed to open secret file", "service", rb.Name, "path", rb.Auth.Secret)
 	}
+	na = auth.NewJwtAuth(&rb.Auth, file)
 
 	sr.Register(rb.Name, &Service{
 		Addr:           rb.Addr,
@@ -251,6 +252,9 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 		CircuitBreaker: feature.NewCircuitBreaker(rb.Name, rb.CircuitBreaker),
 		Auth:           na,
 		Cache:          feature.NewCacheHandler(&rb.Cache),
+		Health:         NewHealthCheck(&rb.Health),
+		RateLimiter:    feature.NewServiceRateLimiter(&rb.RateLimiter),
+		mu:             sync.Mutex{},
 	})
 	j, err := json.Marshal(RegisterResponse{Message: "service " + rb.Name + " registered"})
 	if err != nil {
@@ -277,7 +281,12 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// TODO: do a schema validation before actually changing something. duh ¯\_(ツ)_/¯
+	err = config.Validate.Struct(ub)
+	if err != nil {
+		slog.Error("Error validating update request body", "error", err.Error())
+		http.Error(w, "Error validating request body", http.StatusBadRequest)
+		return
+	}
 
 	s := sr.GetService(ub.Name)
 	if s == nil {
