@@ -34,6 +34,7 @@ func main() {
 	e.GET("/private", private)
 	e.GET("/login", login)
 	e.GET("/health", health)
+	e.GET("/redirect", redirect)
 
 	if err := e.Start(":" + fmt.Sprint(Port)); err != nil && err != http.ErrServerClosed {
 		e.Logger.Fatal("shutting down the server")
@@ -56,6 +57,10 @@ func private(c echo.Context) error {
 		Message: "Accessing Private Area",
 		Claims:  c.Request().Header.Get("X-Claims"),
 	})
+}
+
+func redirect(c echo.Context) error {
+	return c.Redirect(http.StatusPermanentRedirect, "http://localhost:8080/private")
 }
 
 func login(c echo.Context) error {
