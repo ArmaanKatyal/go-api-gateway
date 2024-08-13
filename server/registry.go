@@ -272,7 +272,6 @@ func (sr *ServiceRegistry) RegisterService(w http.ResponseWriter, r *http.Reques
 // UpdateService updates an existing service in the registry
 func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request) {
 	slog.Info("Updating service", "req", RequestToMap(r))
-	// TODO: only provide the fields that need to be updated, instead of the whole schema
 	var ub UpdateBody
 	err := json.NewDecoder(r.Body).Decode(&ub)
 	if err != nil {
@@ -295,37 +294,29 @@ func (sr *ServiceRegistry) UpdateService(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	wl := feature.NewIPWhiteList()
+	feature.PopulateIPWhiteList(wl, ub.WhiteList)
 
-	// modify the address
-	s.Addr = ub.Addr
-	// add the new whitelisted ip
-	existingLists := s.IPWhiteList.GetWhitelist()
-	for _, v := range ub.WhiteList {
-		existingLists[v] = true
-	}
-	s.IPWhiteList.UpdateWhitelist(existingLists)
-	s.FallbackUri = ub.FallbackUri
-
-	// Update auth
 	var na *auth.JwtAuth
-	if ub.Auth.Secret != "" {
-		file, err := os.Open(ub.Auth.Secret)
-		if err != nil {
-			slog.Error("failed to open secret file", "service", ub.Name, "path", ub.Auth.Secret)
-		}
-		na = auth.NewJwtAuth(&ub.Auth, file)
-	} else {
-		na = auth.NewJwtAuth(&ub.Auth, nil)
+	file, err := os.Open(ub.Auth.Secret)
+	if err != nil {
+		slog.Error("failed to open secret file", "service", ub.Name, "path", ub.Auth.Secret)
 	}
-	s.Auth = na
-
-	// Update cache
-	s.Cache = feature.NewCacheHandler(&ub.Cache)
+	na = auth.NewJwtAuth(&ub.Auth, file)
+	updated := &Service{
+		Addr:           ub.Addr,
+		FallbackUri:    ub.FallbackUri,
+		IPWhiteList:    wl,
+		CircuitBreaker: feature.NewCircuitBreaker(ub.Name, ub.CircuitBreaker),
+		Auth:           na,
+		Cache:          feature.NewCacheHandler(&ub.Cache),
+		Health:         NewHealthCheck(&ub.Health),
+		RateLimiter:    feature.NewServiceRateLimiter(&ub.RateLimiter),
+		mu:             sync.Mutex{},
+	}
 
 	// Update the service in the registry
-	sr.Update(ub.Name, s)
+	sr.Update(ub.Name, updated)
 
 	j, err := json.Marshal(ResponseBody{Message: "service " + ub.Name + " updated"})
 	if err != nil {
