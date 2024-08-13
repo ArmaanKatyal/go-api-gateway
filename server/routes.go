@@ -227,7 +227,7 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 	}
 	if err != nil {
 		slog.Error("Error forwarding request", "error", err.Error(), "service_name", serviceName)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "service is down", http.StatusInternalServerError)
 		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusInternalServerError), Method: r.Method, Route: r.URL.String()}, start)
 	}
 }
