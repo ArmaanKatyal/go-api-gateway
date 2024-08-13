@@ -40,10 +40,18 @@ func (j *JwtAuth) getSecret() []byte {
 	return j.secret
 }
 
+func resolvePath(path string) string {
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return strings.Join(parts[2:], "/")
+}
+
 // Authenticate checks if the request has a valid JWT token in the header
 func (j *JwtAuth) Authenticate(r *http.Request) AuthError {
 	token := r.Header.Get("Authorization")
-	path := "/" + strings.Split(r.URL.Path, "/")[2]
+	path := "/" + resolvePath(r.URL.Path)
 	slog.Info("Authenticating request", "path", path)
 	exists := j.pathInRoutes(path)
 	if exists && j.IsEnabled() {
