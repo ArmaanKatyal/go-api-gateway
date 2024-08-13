@@ -1,11 +1,19 @@
 package feature
 
 import (
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"golang.org/x/time/rate"
 	"log/slog"
 	"sync"
 	"time"
+
+	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"golang.org/x/time/rate"
+)
+
+type LimiterType string
+
+const (
+	GlobalLimiter  LimiterType = "Global"
+	ServiceLimiter LimiterType = "Service"
 )
 
 type Visitor struct {
@@ -14,19 +22,25 @@ type Visitor struct {
 }
 
 type BaseRateLimiter struct {
-	Enabled  bool
-	mu       sync.Mutex
-	visitors map[string]*Visitor
-	Rate     rate.Limit
-	Burst    int
-	Cleanup  int
+	limitertype LimiterType
+	Enabled     bool
+	mu          sync.Mutex
+	visitors    map[string]*Visitor
+	Rate        rate.Limit
+	Burst       int
+	Cleanup     int
 }
 
 func (rl *BaseRateLimiter) CleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
 		rl.mu.Lock()
-		slog.Info("Cleaning up visitors")
+		switch rl.limitertype {
+		case GlobalLimiter:
+			slog.Info("cleaning up global visitors")
+		case ServiceLimiter:
+			slog.Info("cleaning up service visitors")
+		}
 		for ip, v := range rl.visitors {
 			if time.Since(v.LastSeen) > time.Duration(rl.Cleanup)*time.Second {
 				delete(rl.visitors, ip)
@@ -71,12 +85,13 @@ type ServiceRateLimiter struct {
 func NewServiceRateLimiter(conf *config.RateLimiterSettings) *ServiceRateLimiter {
 	rl := &ServiceRateLimiter{
 		BaseRateLimiter: BaseRateLimiter{
-			Enabled:  conf.Enabled,
-			mu:       sync.Mutex{},
-			visitors: make(map[string]*Visitor),
-			Rate:     rate.Limit(conf.Rate),
-			Burst:    conf.Burst,
-			Cleanup:  conf.CleanupInterval,
+			limitertype: ServiceLimiter,
+			Enabled:     conf.Enabled,
+			mu:          sync.Mutex{},
+			visitors:    make(map[string]*Visitor),
+			Rate:        rate.Limit(conf.Rate),
+			Burst:       conf.Burst,
+			Cleanup:     conf.CleanupInterval,
 		},
 	}
 	go rl.CleanupVisitors()
@@ -90,12 +105,13 @@ type GlobalRateLimiter struct {
 func NewGlobalRateLimiter() *GlobalRateLimiter {
 	rl := &GlobalRateLimiter{
 		BaseRateLimiter: BaseRateLimiter{
-			Enabled:  config.AppConfig.Server.RateLimiter.Enabled,
-			mu:       sync.Mutex{},
-			visitors: make(map[string]*Visitor),
-			Rate:     rate.Limit(config.AppConfig.Server.RateLimiter.Rate),
-			Burst:    config.AppConfig.Server.RateLimiter.Burst,
-			Cleanup:  config.AppConfig.Server.RateLimiter.CleanupInterval,
+			limitertype: GlobalLimiter,
+			Enabled:     config.AppConfig.Server.RateLimiter.Enabled,
+			mu:          sync.Mutex{},
+			visitors:    make(map[string]*Visitor),
+			Rate:        rate.Limit(config.AppConfig.Server.RateLimiter.Rate),
+			Burst:       config.AppConfig.Server.RateLimiter.Burst,
+			Cleanup:     config.AppConfig.Server.RateLimiter.CleanupInterval,
 		},
 	}
 	go rl.CleanupVisitors()
