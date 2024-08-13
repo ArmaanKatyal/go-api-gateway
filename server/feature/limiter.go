@@ -31,6 +31,7 @@ type BaseRateLimiter struct {
 	Cleanup     int
 }
 
+// CleanupVisitors periodically cleans up visitors which inturn reset the limits
 func (rl *BaseRateLimiter) CleanupVisitors() {
 	for {
 		time.Sleep(time.Minute)
