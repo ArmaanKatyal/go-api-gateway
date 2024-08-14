@@ -37,7 +37,7 @@ type DeregisterResponse struct {
 
 // IAuth Interface for authenticating requests
 type IAuth interface {
-	Authenticate(*http.Request) auth.AuthError
+	Authenticate(*http.Request) auth.JwtError
 	IsEnabled() bool
 }
 

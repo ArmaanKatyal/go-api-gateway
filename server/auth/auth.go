@@ -18,15 +18,15 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-type AuthError error
+type JwtError error
 
 const (
 	DefaultSecret = "test"
 )
 
 var (
-	ErrTokenMissing AuthError = errors.New("missing auth token")
-	ErrInvalidToken AuthError = errors.New("invalid auth token")
+	ErrTokenMissing JwtError = errors.New("missing auth token")
+	ErrInvalidToken JwtError = errors.New("invalid auth token")
 )
 
 type JwtAuth struct {
@@ -49,7 +49,7 @@ func resolvePath(path string) string {
 }
 
 // Authenticate checks if the request has a valid JWT token in the header
-func (j *JwtAuth) Authenticate(r *http.Request) AuthError {
+func (j *JwtAuth) Authenticate(r *http.Request) JwtError {
 	token := r.Header.Get("Authorization")
 	path := "/" + resolvePath(r.URL.Path)
 	slog.Info("Authenticating request", "path", path)
