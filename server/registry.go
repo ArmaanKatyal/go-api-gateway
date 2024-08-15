@@ -395,7 +395,7 @@ func (sr *ServiceRegistry) Heartbeat() {
 
 type Cacher interface {
 	Get(string) (interface{}, bool)
-	Set(string, interface{})
+	Set(string, interface{}, feature.CacheExpiration)
 	IsEnabled() bool
 }
 
@@ -412,7 +412,7 @@ func (sr *ServiceRegistry) SetCache(name string, key string, value interface{}) 
 	if s == nil {
 		return false
 	}
-	s.Cache.Set(key, value)
+	s.Cache.Set(key, value, feature.DefaultExpiration)
 	return true
 }
 

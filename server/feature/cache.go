@@ -8,6 +8,13 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+type CacheExpiration int
+
+const (
+	DefaultExpiration CacheExpiration = 0
+	NoExpiration      CacheExpiration = -1
+)
+
 type CacheHandler struct {
 	Enabled            bool `json:"enabled"`
 	ExpirationInterval uint `json:"expirationInterval"`
@@ -27,8 +34,8 @@ func NewCacheHandler(conf *config.CacheSettings) *CacheHandler {
 		Enabled:            conf.Enabled,
 		ExpirationInterval: conf.ExpirationInterval,
 		CleanupInterval:    conf.CleanupInterval,
-		cache: cache.New(time.Duration(conf.ExpirationInterval)*time.Minute,
-			time.Duration(conf.CleanupInterval)*time.Minute),
+		cache: cache.New(time.Duration(conf.ExpirationInterval)*time.Second,
+			time.Duration(conf.CleanupInterval)*time.Second),
 	}
 }
 
@@ -36,8 +43,8 @@ func (c *CacheHandler) Get(key string) (interface{}, bool) {
 	return c.cache.Get(key)
 }
 
-func (c *CacheHandler) Set(key string, value interface{}) {
-	c.cache.Set(key, value, time.Duration(c.ExpirationInterval)*time.Minute)
+func (c *CacheHandler) Set(key string, value interface{}, exp CacheExpiration) {
+	c.cache.Set(key, value, time.Duration(exp))
 }
 
 func (c *CacheHandler) IsEnabled() bool {
