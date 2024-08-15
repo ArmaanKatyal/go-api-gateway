@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -235,8 +236,20 @@ func (rh *RequestHandler) HandleRequest(w http.ResponseWriter, r *http.Request) 
 // generateCacheKey generates a key based on the service name and request.URL
 // TODO: maybe also include request.Headers and hash them together to generate more cohesive key
 func (rh *RequestHandler) generateCacheKey(service string, r *http.Request) string {
-	key := "cache-" + service + "-" + r.URL.String()
-	return key
+	headers := ""
+	for k, v := range r.Header {
+		headers += "[" + k + "-" + strings.Join(v, "-") + "]"
+	}
+	val, err := io.ReadAll(r.Body)
+	if err != nil {
+		slog.Error("failed to parse req body while generating cache key", "service", service, "req", RequestToMap(r))
+		val = []byte{}
+	}
+	components := []string{service, r.Method, r.URL.String(), headers, string(val)}
+	baseKey := "cache-" + strings.Join(components, "-")
+	h := sha256.New()
+	h.Write([]byte(baseKey))
+	return string(h.Sum(nil))
 }
 
 // forwardRequest forwards the request to the resolved service
