@@ -39,7 +39,7 @@ func TestCacheHandler(t *testing.T) {
 func TestCacheGet(t *testing.T) {
 	t.Run("success get value", func(t *testing.T) {
 		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
-		cacheHandler.Set("test", "value")
+		cacheHandler.Set("test", "value", DefaultExpiration)
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
@@ -52,8 +52,8 @@ func TestCacheGet(t *testing.T) {
 	})
 	t.Run("override value", func(t *testing.T) {
 		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
-		cacheHandler.Set("test", "value")
-		cacheHandler.Set("test", "new value")
+		cacheHandler.Set("test", "value", DefaultExpiration)
+		cacheHandler.Set("test", "new value", DefaultExpiration)
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "new value", value)
@@ -76,15 +76,15 @@ func TestCacheGet(t *testing.T) {
 func TestCacheSet(t *testing.T) {
 	t.Run("success set value", func(t *testing.T) {
 		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
-		cacheHandler.Set("test", "value")
+		cacheHandler.Set("test", "value", DefaultExpiration)
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "value", value)
 	})
 	t.Run("override value", func(t *testing.T) {
 		cacheHandler := NewCacheHandler(&config.CacheSettings{Enabled: true, ExpirationInterval: 5, CleanupInterval: 10})
-		cacheHandler.Set("test", "value")
-		cacheHandler.Set("test", "new value")
+		cacheHandler.Set("test", "value", DefaultExpiration)
+		cacheHandler.Set("test", "new value", DefaultExpiration)
 		value, found := cacheHandler.Get("test")
 		assert.True(t, found)
 		assert.Equal(t, "new value", value)

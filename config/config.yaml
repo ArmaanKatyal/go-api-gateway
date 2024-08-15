@@ -35,8 +35,8 @@ registry:
           - "/private"
       cache:
         enabled: true
-        expirationInterval: 5
-        cleanupInterval: 10
+        expirationInterval: 60
+        cleanupInterval: 60
       circuitBreaker:
         enabled: true
         timeout: 5
