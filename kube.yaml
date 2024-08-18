@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: gateway
-          image: armaan24katyal/go-api-gateway:v2
+          image: armaan24katyal/go-api-gateway:1.0.0
           livenessProbe:
             exec:
               command: ["curl", "-f", "http://localhost:8080/health"]
@@ -58,17 +58,18 @@ data:
         enabled: false
         certFile: "path/to/cert.pem"
         keyFile: "path/to/key.pem"
-      circuitbreaker:
-        enabled: true
-        timeout: 5
-        interval: 0
       metrics:
         prefix: "gateway"
         buckets: [0.005, 0.01, 0.025, 0.05, 0.1]
+      rateLimiter:
+        enabled: true
+        rate: 100
+        burst: 100
+        cleanupInterval: 3600
     registry:
       heartbeatInterval: 15
       services:
-        - name: backend
+        - name: example
           addr: "localhost:3000"
           whitelist:
             - "ALL"
@@ -84,10 +85,15 @@ data:
               - "/private"
           cache:
             enabled: true
-            expirationInterval: 5
-            cleanupInterval: 10
-    ratelimiter:
-      enabled: true
-      maxRequests: 500
-      cleanupInterval: 1
-      eventInterval: 60
+            expirationInterval: 60
+            cleanupInterval: 60
+          circuitBreaker:
+            enabled: true
+            timeout: 5
+            interval: 0
+            failureRatio: 0.5
+          rateLimiter:
+            enabled: true
+            rate: 10
+            burst: 10
+            cleanupInterval: 3600

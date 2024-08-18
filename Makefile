@@ -24,6 +24,12 @@ build_client:
 image:
 	docker build -t go-api-gateway .
 
+linux_image:
+	docker buildx build --platform linux/amd64 . -t armaan24katyal/go-api-gateway:latest
+
+k8:
+	kubectl apply -f kube.yaml
+
 run_image:
 	docker run --env=GOPATH=/go --network=bridge --workdir=/app -p 8080:8080 --restart=no --runtime=runc --name gateway -d go-api-gateway:latest
 
