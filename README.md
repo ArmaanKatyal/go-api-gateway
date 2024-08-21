@@ -1,4 +1,4 @@
-# gateway
+# go-gate
 
 It is a work-in-progress API Gateway built in Go, designed for learning and experimentation. It includes various essential features commonly found in production API Gateways.
 
