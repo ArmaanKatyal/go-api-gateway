@@ -1,9 +1,10 @@
 package middleware
 
 import (
-	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
 	"log/slog"
 	"net/http"
+
+	"github.com/ArmaanKatyal/go-api-gateway/server/feature"
 )
 
 func RateLimiterMiddleware(limiter *feature.GlobalRateLimiter) func(http.HandlerFunc) http.HandlerFunc {

@@ -1,4 +1,4 @@
-module github.com/ArmaanKatyal/go_api_gateway
+module github.com/ArmaanKatyal/go-api-gateway
 
 go 1.22.3
 

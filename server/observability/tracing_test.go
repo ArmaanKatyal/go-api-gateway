@@ -1,8 +1,9 @@
 package observability
 
 import (
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"testing"
+
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
 
 	"github.com/stretchr/testify/assert"
 )

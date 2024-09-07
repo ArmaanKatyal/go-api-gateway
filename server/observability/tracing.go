@@ -2,9 +2,10 @@ package observability
 
 import (
 	"fmt"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"reflect"
 	"time"
+
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"

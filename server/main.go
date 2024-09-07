@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"crypto/tls"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
 	"time"
+
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
 )
 
 func main() {

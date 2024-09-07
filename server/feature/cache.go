@@ -3,7 +3,7 @@ package feature
 import (
 	"time"
 
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
 
 	"github.com/patrickmn/go-cache"
 )

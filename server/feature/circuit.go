@@ -1,9 +1,10 @@
 package feature
 
 import (
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/sony/gobreaker/v2"
 	"log/slog"
+
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
+	"github.com/sony/gobreaker/v2"
 )
 
 type CircuitBreaker struct {

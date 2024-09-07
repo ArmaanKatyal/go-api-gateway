@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ArmaanKatyal/go_api_gateway/server/auth"
-	"github.com/ArmaanKatyal/go_api_gateway/server/config"
-	"github.com/ArmaanKatyal/go_api_gateway/server/feature"
-	"github.com/ArmaanKatyal/go_api_gateway/server/observability"
+	"github.com/ArmaanKatyal/go-api-gateway/server/auth"
+	"github.com/ArmaanKatyal/go-api-gateway/server/config"
+	"github.com/ArmaanKatyal/go-api-gateway/server/feature"
+	"github.com/ArmaanKatyal/go-api-gateway/server/observability"
 )
 
 type RegisterBody config.ServiceConf
