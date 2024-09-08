@@ -381,9 +381,10 @@ func (rh *RequestHandler) handleFallbackRequest(w http.ResponseWriter, r *http.R
 	slog.Error("Circuit breaker is open, making a fallback request", "service", service)
 	fallbackURI := rh.ServiceRegistry.GetFallbackUri(service)
 	if fallbackURI == "" {
-		slog.Error("Fallback URI not found", "service_name", service)
-		http.Error(w, "fallback uri not found", http.StatusNotFound)
-		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusNotFound), Method: r.Method, Route: r.URL.String()}, t)
+		// If fallbackURI is not provided the default behavior is to return a 503
+		slog.Info("no fallbackURI provided", "service", service)
+		http.Error(w, http.StatusText(http.StatusServiceUnavailable), http.StatusServiceUnavailable)
+		rh.CollectMetrics(&observability.MetricsInput{Code: GetStatusCode(http.StatusServiceUnavailable), Method: r.Method, Route: r.URL.String()}, t)
 		return nil
 	}
 

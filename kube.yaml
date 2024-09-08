@@ -73,7 +73,6 @@ data:
           addr: "localhost:3000"
           whitelist:
             - "ALL"
-          fallbackUri: "localhost:3001"
           health:
             enabled: true
             uri: "/health"
